@@ -65,11 +65,12 @@ int main(int argc, char* argv[]) {
     uint k = 2;
     TokenType L = alphabet.size();
     std::map<TokenType, kmer> tokens;
-    std::unordered_map<kmer, TokenType, tuple_hash<TokenType>> rev_tokens;
+    std::unordered_map<TokenType, size_t> token_to_length;
 
     std::vector<std::thread> threads;
     std::vector<TokenType> new_seq;
     std::vector<bool> to_replace(seq.size(), false);
+
     while (true) {
         std::cout << "Tokens " << L;
         
@@ -91,13 +92,15 @@ int main(int argc, char* argv[]) {
 
         merged.push_back(rep);
         tokens[L] = rep;
-        rev_tokens[rep] = L;
 
         std::cout << " transform data" << std::endl;
-        transform_data(seq, merged, tokens, rev_tokens, max_tokens, to_replace, rep, tf, new_seq, L, k);
+        transform_data(seq, merged, tokens, max_tokens, to_replace, rep, tf, new_seq, L, k);
 
         std::string token1 = token_type_to_string(std::get<0>(rep), alphabet, tokens);
         std::string token2 = token_type_to_string(std::get<1>(rep), alphabet, tokens);
+
+        token_to_length[L] = token1.size() + token2.size();
+
         std::cout << token1 << " " << token2 << " " << tf << " : "<< "replace: " << seq.size() << " -> " << new_seq.size() << std::endl;
 
         L += 1;
@@ -116,18 +119,45 @@ int main(int argc, char* argv[]) {
         tokens_str_map[element.second] = element.first;
     }
 
-    // std::ofstream out_file(output_bpe_encoding_file);
-    // if (out_file.is_open()) {
-    //     for (const auto& element : seq) {
-    //         if (element == 5) {
-    //             out_file << "\n";
-    //         } else {
-    //             out_file << tokens_str_map.at(element) << " ";
-    //         }
-    //     }
-    //     out_file << std::endl;
-    //     out_file.close();
-    // }
+    
+    std::map<std::string, std::vector<std::pair<size_t, size_t>>> kmer2poses;
+    // init kmer2poses with empty vectors and keys from tokens_str_map
+    for (const auto& element : tokens_str_map) {
+        kmer2poses[element.second] = std::vector<std::pair<size_t, size_t>>();
+    }
+    
+    
+    std::ofstream out_file(output_bpe_encoding_file);
+    size_t pos = 0;
+    size_t seqid = 0;
+    if (out_file.is_open()) {
+        for (const auto& element : seq) {
+            if (element == 5) {
+                seqid += 1;
+                pos = 0;
+                out_file << "\n";
+            } else {
+                std::string token_string = tokens_str_map.at(element);
+                kmer2poses[token_string].push_back(std::make_pair(seqid, pos));
+                out_file << token_string << " ";
+                pos += token_string.size();
+            }
+        }
+        out_file << std::endl;
+        out_file.close();
+    }
+
+    std::ofstream poses_file(output_poses_file);
+    // write poses to file
+    for (const auto& element : kmer2poses) {
+        poses_file << element.first << " ";
+        for (const auto& pos : element.second) {
+            poses_file << pos.first << ":" << pos.second << " ";
+        }
+        poses_file << std::endl;
+    }
+
+    poses_file.close();
 
     nlohmann::ordered_json json_data = get_json(tokens_str_map, tokens);
 
