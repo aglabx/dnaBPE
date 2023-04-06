@@ -24,14 +24,18 @@ std::string get_dataset(const std::vector<std::string>& seqs) {
 std::vector<TokenType> convert_to_vector(const std::string& dataset, const std::map<std::string, TokenType>& alphabet) {
     std::vector<TokenType> seq;
     seq.reserve(dataset.size()); // Reserve space
+
+    std::string temp(1, '\0'); // Temporary string for lookup
     for (auto x : dataset) {
         if (x == '\n') {
             x = '~';
         }
-        if (alphabet.find(std::string(1, x)) != alphabet.end()) {
-            seq.push_back(alphabet.at(std::string(1, x)));
+        temp[0] = x;
+        auto it = alphabet.find(temp);
+        if (it != alphabet.end()) {
+            seq.emplace_back(it->second);
         } else {
-            seq.push_back(alphabet.at("[UNK]"));
+            seq.emplace_back(alphabet.at("[UNK]"));
         }
     }
     return seq;
