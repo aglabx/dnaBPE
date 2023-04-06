@@ -10,6 +10,7 @@
 
 
 void compute_freqs(const std::vector<TokenType>& seq, std::vector<std::atomic_size_t>& c, std::vector<std::thread>& threads, size_t n_threads, TokenType L) {
+    
     auto worker = [&](size_t start, size_t end) {
         for (size_t i = start; i < end; ++i) {
             if (seq[i] > N_HELP_TOKENS && seq[i + 1] > N_HELP_TOKENS) {
@@ -28,6 +29,7 @@ void compute_freqs(const std::vector<TokenType>& seq, std::vector<std::atomic_si
     for (auto &t : threads) {
         t.join();
     }
+    threads.clear();
 }
 
 std::pair<std::size_t, kmer> found_max(const std::vector<std::atomic_size_t>& c, TokenType L) {
