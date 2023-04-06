@@ -51,6 +51,12 @@ It is the simple one sequence per line format.
 - prefix.bpe - transformed sequences
 - prefix.poses - token frequencies and positions in the input sequences. Tab-separated file with the following columns: token, frequency, space-separated positions in the sequence. Each position like sequd:pos, where sequd is the sequence position in the input file and pos and pos is the zero-base position in the sequence.
 
+```txt
+AAAC	62504	14:161 15:160 16:161 17:161 18:161 20:161 ...
+AAACAGG	6679	105:775 106:774 158:774 159:774 160:774 ...
+AAACAGGATTAGATACCCTGGTAGTCCAC	5346	82:777 273:789 274:789 ...
+```
+
 # Usage for HuggingFace Transformers
 
 You can simply upload to HuggingFace and use it in your code.
