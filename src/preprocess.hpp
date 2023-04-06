@@ -12,6 +12,8 @@ std::string get_dataset(const std::vector<std::string>& seqs) {
         if (!first) {
             ss << "~";
         }
+        std::transform(s.begin(), s.end(), s.begin(),
+               [](unsigned char c){ return std::toupper(c); });
         first = false;
         ss << s;
     }
@@ -19,7 +21,7 @@ std::string get_dataset(const std::vector<std::string>& seqs) {
 }
 
 // in our case maximal tokens for std::uint16_t is 65535
-std::vector<TokenType> convert_to_vector(std::string& dataset, const std::map<std::string, TokenType>& alphabet) {
+std::vector<TokenType> convert_to_vector(const std::string& dataset, const std::map<std::string, TokenType>& alphabet) {
     std::vector<TokenType> seq;
     seq.reserve(dataset.size()); // Reserve space
     for (auto x : dataset) {
