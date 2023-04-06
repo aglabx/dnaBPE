@@ -121,9 +121,11 @@ int main(int argc, char* argv[]) {
 
     
     std::map<std::string, std::vector<std::pair<size_t, size_t>>> kmer2poses;
+    std::map<std::string, size_t> kmer2tf;
     // init kmer2poses with empty vectors and keys from tokens_str_map
     for (const auto& element : tokens_str_map) {
         kmer2poses[element.second] = std::vector<std::pair<size_t, size_t>>();
+        kmer2tf[element.second] = 0;
     }
     
     
@@ -139,6 +141,7 @@ int main(int argc, char* argv[]) {
             } else {
                 std::string token_string = tokens_str_map.at(element);
                 kmer2poses[token_string].push_back(std::make_pair(seqid, pos));
+                kmer2tf[token_string] += 1;
                 out_file << token_string << " ";
                 pos += token_string.size();
             }
@@ -148,15 +151,14 @@ int main(int argc, char* argv[]) {
     }
 
     std::ofstream poses_file(output_poses_file);
-    // write poses to file
+    // write poses to file and add the secone argument tf from kmer2tf
     for (const auto& element : kmer2poses) {
-        poses_file << element.first << " ";
+        poses_file << element.first << " " << kmer2tf[element.first] << " ";
         for (const auto& pos : element.second) {
-            poses_file << pos.first << ":" << pos.second << " ";
+            poses_file << pos.first << " " << pos.second << " ";
         }
         poses_file << std::endl;
     }
-
     poses_file.close();
 
     nlohmann::ordered_json json_data = get_json(tokens_str_map, tokens);
