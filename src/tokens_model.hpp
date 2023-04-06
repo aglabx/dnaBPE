@@ -1,5 +1,8 @@
 
-#include "nlohmann/json.hpp"
+#ifndef TOKENS_MODELS_FILE_H
+#define TOKENS_MODELS_FILE_H
+
+#include "../nlohmann/json.hpp"
 #include <iostream>
 
 using json = nlohmann::json;
@@ -165,3 +168,5 @@ ordered_json get_json(const std::map<TokenType, std::string>& tokens_str_map, co
  
     return config;
 }
+
+#endif

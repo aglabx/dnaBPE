@@ -1,4 +1,6 @@
-#pragma once
+#ifndef TOKENS_FILE_H
+#define TOKENS_FILE_H
+
 #include <string>
 #include <tuple>
 #include <functional>
@@ -9,6 +11,8 @@ typedef std::uint16_t TokenType;
 
 const uint N_HELP_TOKENS = 6;
 const uint MAX_N_TOKENS = 65535;
+
+typedef std::tuple<TokenType, TokenType> kmer;
 
 
 std::map<std::string, TokenType> alphabet = {
@@ -82,3 +86,5 @@ std::string token_type_to_string(TokenType token, const std::map<std::string, To
     // If the token is not found in either map, return an empty string
     return "";
 }
+
+#endif

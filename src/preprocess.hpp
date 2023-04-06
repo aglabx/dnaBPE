@@ -1,4 +1,6 @@
-#pragma once
+#ifndef PREPROCESS_FILE_H
+#define PREPROCESS_FILE_H
+
 #include <string>
 #include <vector>
 #include <sstream>
@@ -8,12 +10,10 @@
 std::string get_dataset(const std::vector<std::string>& seqs) {
     std::stringstream ss;
     bool first = true;
-    for (const auto& s : seqs) {
+    for (auto& s : seqs) {
         if (!first) {
             ss << "~";
         }
-        std::transform(s.begin(), s.end(), s.begin(),
-               [](unsigned char c){ return std::toupper(c); });
         first = false;
         ss << s;
     }
@@ -36,3 +36,5 @@ std::vector<TokenType> convert_to_vector(const std::string& dataset, const std::
     }
     return seq;
 }
+
+#endif

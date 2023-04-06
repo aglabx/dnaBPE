@@ -1,8 +1,11 @@
-#pragma once
-# include <string>
-# include <vector>
-# include <fstream>
-# include <iostream>
+#ifndef READERS_FILE_H
+#define READERS_FILE_H
+
+#include <string>
+#include <vector>
+#include <fstream>
+#include <iostream>
+#include <algorithm>
 
 void get_sequences_fasta(const std::string& file_name, std::vector<std::string>& seqs) {
   std::ifstream file(file_name);
@@ -25,6 +28,8 @@ void get_sequences_fasta(const std::string& file_name, std::vector<std::string>&
   }
 
   if (!seq.empty()) {
+    std::transform(seq.begin(), seq.end(), seq.begin(),
+               [](unsigned char c){ return std::toupper(c); });
     seqs.push_back(seq);
   }
 
@@ -53,8 +58,12 @@ void get_sequences_reads(const std::string& reads_file_name, std::vector<std::st
     if (fh.is_open()) {
         std::string line;
         while (std::getline(fh, line)) {
+            std::transform(line.begin(), line.end(), line.begin(),
+               [](unsigned char c){ return std::toupper(c); });
             seqs.push_back(line);
         }
         fh.close();
     }
 }
+
+#endif

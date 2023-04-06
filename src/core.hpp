@@ -1,4 +1,5 @@
-#pragma once
+#ifndef CORE_FILE_H
+#define CORE_FILE_H
 
 #include <string>
 #include <vector>
@@ -6,9 +7,6 @@
 #include <atomic>
 #include <unordered_map>
 #include "tokens.hpp"
-
-
-typedef std::tuple<TokenType, TokenType> kmer;
 
 
 void compute_freqs(const std::vector<TokenType>& seq, std::vector<std::atomic_size_t>& c, std::vector<std::thread>& threads, size_t n_threads, TokenType L) {
@@ -74,3 +72,5 @@ void transform_data(std::vector<TokenType> &seq, std::vector<kmer> &merged, std:
     seq = std::vector<TokenType>(new_seq.begin(), new_seq.end());
     
 }
+
+#endif
