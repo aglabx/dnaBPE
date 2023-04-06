@@ -153,9 +153,9 @@ int main(int argc, char* argv[]) {
     std::ofstream poses_file(output_poses_file);
     // write poses to file and add the secone argument tf from kmer2tf
     for (const auto& element : kmer2poses) {
-        poses_file << element.first << " " << kmer2tf[element.first] << " ";
+        poses_file << element.first << "\t" << kmer2tf[element.first] << "\t";
         for (const auto& pos : element.second) {
-            poses_file << pos.first << " " << pos.second << " ";
+            poses_file << pos.first << ":" << pos.second << " ";
         }
         poses_file << std::endl;
     }

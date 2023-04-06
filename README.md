@@ -10,6 +10,7 @@ This repository contains a C++ program that applies Byte Pair Encoding (BPE) to 
 - Outputs a JSON model in file containing BPE tokens and their corresponding DNA sub-sequences.
 - JSON file is compatible with the HuggingFace Transformers library.
 - Transforms the input DNA sequences using the computed BPE tokens.
+- Ouput file with information about token frequencies and positions in the input sequences.
 
 ## Requirements
 
@@ -44,7 +45,11 @@ This command will generate a JSON model file with the BPE tokens and their corre
 
 It is the simple one sequence per line format.
 
+### Output files
 
+- prefix.json - JSON file for hugging face transformers
+- prefix.bpe - transformed sequences
+- prefix.poses - token frequencies and positions in the input sequences. Tab-separated file with the following columns: token, frequency, space-separated positions in the sequence. Each position like sequd:pos, where sequd is the sequence position in the input file and pos and pos is the zero-base position in the sequence.
 
 # Usage for HuggingFace Transformers
 
