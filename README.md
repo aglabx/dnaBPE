@@ -1,5 +1,5 @@
 
-# dnaBPE: tokenizer for DNA Sequences
+# dnaBPE: a tokenizer for DNA Sequences
 
 This repository contains a C++ program that applies Byte Pair Encoding (BPE) to tokenize DNA sequences for various downstream applications, including transformer-based language models.
 
@@ -77,11 +77,11 @@ tokenizer.tokenize(dna_data.upper())
 
 - id: A unique identifier for the token.
 - content: The actual content of the token. For example, 
--- [UNK] represents an unknown or out-of-vocabulary token, 
--- [CLS] represents the start of a sequence, 
--- [SEP] represents the separator between two sequences, 
--- [PAD] represents padding, and 
--- [MASK] represents a masked token that is used for pretraining or fine-tuning.
+  * [UNK] represents an unknown or out-of-vocabulary token, 
+  * [CLS] represents the start of a sequence, 
+  * [SEP] represents the separator between two sequences, 
+  * [PAD] represents padding, and 
+  * [MASK] represents a masked token that is used for pretraining or fine-tuning.
 - single_word: A boolean indicating whether the token represents a single word or a sequence of words. For example, [UNK] and [PAD] are single words, while [CLS], [SEP], and [MASK] are not.
 - lstrip: A boolean indicating whether the token needs to be left-stripped before use. For example, a token like "..." might need to be left-stripped to remove leading whitespace.
 - rstrip: A boolean indicating whether the token needs to be right-stripped before use. For example, a token like "Mr." might need to be right-stripped to remove trailing punctuation.
