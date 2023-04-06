@@ -1,0 +1,6 @@
+name: dnaBPE
+channels:
+  - conda-forge
+dependencies:
+  - gcc
+  - gxx
