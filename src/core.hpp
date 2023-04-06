@@ -43,8 +43,7 @@ std::pair<std::size_t, kmer> found_max(const std::vector<std::atomic_size_t>& c,
     return std::make_pair(max_count, rep);
 }
 
-void transform_data(std::vector<TokenType> &seq, std::vector<kmer> &merged, std::map<TokenType, kmer> &tokens, std::unordered_map<kmer, TokenType, tuple_hash<TokenType>> &rev_tokens, size_t max_tokens, std::vector<bool>& to_replace, kmer& rep, size_t tf, std::vector<TokenType>& new_seq,  TokenType L, uint k=2) {
-    
+void transform_data(std::vector<TokenType> &seq, std::vector<kmer> &merged, std::map<TokenType, kmer> &tokens, size_t max_tokens, std::vector<bool>& to_replace, kmer& rep, size_t tf, std::vector<TokenType>& new_seq,  TokenType L, uint k=2) {
     
 
     std::fill(to_replace.begin(), to_replace.end(), false);
