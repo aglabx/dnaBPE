@@ -14,8 +14,17 @@ const uint MAX_N_TOKENS = 65535;
 
 typedef std::tuple<TokenType, TokenType> kmer;
 
+namespace std {
+    template<>
+    struct hash<tuple<TokenType, TokenType>> {
+        size_t operator() (const tuple<TokenType, TokenType> &t) const {
+            return hash<TokenType>()(get<0>(t)) ^ hash<TokenType>()(get<1>(t));
+        }
+    };
+}
 
-std::map<std::string, TokenType> alphabet = {
+
+std::unordered_map<std::string, TokenType> alphabet = {
     {"[UNK]", 0},
     {"[CLS]", 1},
     {"[SEP]", 2},
@@ -36,6 +45,14 @@ struct tuple_compare {
             return std::get<1>(a) < std::get<1>(b);
         }
         return std::get<0>(a) < std::get<0>(b);
+    }
+};
+
+
+struct pair_hash {
+    template <class T1, class T2>
+    std::size_t operator() (const std::pair<T1, T2> &pair) const {
+        return std::hash<T1>()(pair.first) ^ std::hash<T2>()(pair.second);
     }
 };
 
@@ -67,7 +84,7 @@ struct tuple_hash {
 
 
 // NB: this function is not used in the current implementation and incorrect
-std::string token_type_to_string(TokenType token, const std::map<std::string, TokenType>& alphabet, const std::map<TokenType, kmer>& tokens) {
+std::string token_type_to_string(TokenType token, const std::unordered_map<std::string, TokenType>& alphabet, const std::unordered_map<TokenType, kmer>& tokens) {
     
     // Check if the token is in the initial alphabet
     for (const auto& element : alphabet) {

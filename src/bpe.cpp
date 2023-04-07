@@ -13,8 +13,7 @@
 #include "output.hpp"
 
 
-
-std::vector<TokenType> get_data(std::string file_name, std::string format) {
+std::vector<TokenType> get_data(std::string& file_name, std::string& format) {
     
     std::vector<std::string> seqs;
 
@@ -71,15 +70,17 @@ int main(int argc, char* argv[]) {
     std::vector<kmer> merged;
     uint k = 2;
     TokenType L = alphabet.size();
-    std::map<TokenType, kmer> tokens;
+    std::unordered_map<TokenType, kmer> tokens;
+    std::unordered_map<kmer, TokenType> rev_tokens;
+
     std::unordered_map<TokenType, size_t> token_to_length;
 
     std::vector<std::thread> threads;
     std::vector<TokenType> new_seq;
     std::vector<bool> to_replace(seq.size(), false);
 
-    std::map<TokenType, std::string> alphabet_map;
-    std::map<TokenType, size_t> alphabet_tf_map;
+    std::unordered_map<TokenType, std::string> alphabet_map;
+    std::unordered_map<TokenType, size_t> alphabet_tf_map;
     // fill with alphabet
     for (const auto& element : alphabet) {
         alphabet_map[element.second] = element.first;
@@ -95,8 +96,13 @@ int main(int argc, char* argv[]) {
             elem.store(0);
         }
 
-        std::cout << " compute freqs";
-        compute_freqs(seq, c, threads, n_threads, L);
+        if (seq.size() > 1000000) {
+            std::cout << " par compute freqs";
+            compute_freqs_par(seq, c, threads, n_threads, L);
+        } else {
+            std::cout << " seq compute freqs";
+            compute_freqs_seq(seq, c, L);
+        }
 
         std::cout << " find max";
         auto max_result = found_max(c, L);
@@ -108,6 +114,7 @@ int main(int argc, char* argv[]) {
 
         merged.push_back(rep);
         tokens[L] = rep;
+        rev_tokens[rep] = L;
 
         std::string token_str = alphabet_map.at(std::get<0>(rep)) + alphabet_map.at(std::get<1>(rep));
         alphabet_map[L] = token_str;
@@ -118,7 +125,7 @@ int main(int argc, char* argv[]) {
 
         token_to_length[L] = alphabet_map[L].size();
 
-        std::cout << alphabet_map.at(std::get<0>(rep)) << " " << alphabet_map.at(std::get<1>(rep)) << " " << tf << " : "<< "replace: " << seq.size() << " -> " << new_seq.size() << std::endl;
+        std::cout << alphabet_map.at(std::get<0>(rep)) << " " << alphabet_map.at(std::get<1>(rep)) << " " << tf << " : "<< "size: " << seq.size() << std::endl;
 
         L += 1;
 

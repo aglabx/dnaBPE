@@ -12,7 +12,7 @@ typedef std::uint16_t TokenType;
 typedef std::tuple<TokenType, TokenType> kmer;
 
 
-ordered_json get_json(const std::map<TokenType, std::string>& alphabet_map, const std::map<TokenType, kmer>& tokens) {
+ordered_json get_json(const std::unordered_map<TokenType, std::string>& alphabet_map, const std::unordered_map<TokenType, kmer>& tokens) {
     
     // Create a json object and populate it with the data
     ordered_json config;

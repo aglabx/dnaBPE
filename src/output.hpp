@@ -15,14 +15,14 @@
 
 using json = nlohmann::json;
 
-void save_snapshot(const std::map<TokenType, kmer>& tokens, const std::vector<TokenType>& seq, const std::map<TokenType, std::string>& alphabet_map, std::map<TokenType, size_t>& alphabet_tf_map, const std::string& output_prefix, std::string n_tokens_suffix,  bool save_seq=false) {
+void save_snapshot(const std::unordered_map<TokenType, kmer>& tokens, const std::vector<TokenType>& seq, const std::unordered_map<TokenType, std::string>& alphabet_map, std::unordered_map<TokenType, size_t>& alphabet_tf_map, const std::string& output_prefix, std::string n_tokens_suffix,  bool save_seq=false) {
 
-    std::string output_bpe_encoding_file = output_prefix + n_tokens_suffix + ".bpe";
-    std::string output_poses_file = output_prefix + n_tokens_suffix + ".poses";
-    std::string output_model_file = output_prefix + n_tokens_suffix + ".json";
+    std::string output_bpe_encoding_file = output_prefix + "." + n_tokens_suffix + ".bpe";
+    std::string output_poses_file = output_prefix + "." + n_tokens_suffix + ".poses";
+    std::string output_model_file = output_prefix + "." + n_tokens_suffix + ".json";
 
-    std::map<std::string, std::vector<std::pair<size_t, size_t>>> kmer2poses;
-    std::map<std::string, size_t> kmer2tf;
+    std::unordered_map<std::string, std::vector<std::pair<size_t, size_t>>> kmer2poses;
+    std::unordered_map<std::string, size_t> kmer2tf;
     // init kmer2poses with empty vectors and keys from alphabet_map
     for (const auto& element : alphabet_map) {
         kmer2poses[element.second] = std::vector<std::pair<size_t, size_t>>();
