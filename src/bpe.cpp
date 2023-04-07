@@ -50,9 +50,9 @@ int main(int argc, char* argv[]) {
     size_t max_tokens = std::stoul(argv[4]);
     size_t n_threads = std::stoul(argv[5]);
 
-    std::string output_model_file = output_prefix + ".json";
-    std::string output_poses_file = output_prefix + ".poses";
-    std::string output_bpe_encoding_file = output_prefix + ".bpe";
+    std::string output_model_file = output_prefix + "." + argv[4] + ".json";
+    std::string output_poses_file = output_prefix + "." + argv[4] + ".poses";
+    std::string output_bpe_encoding_file = output_prefix + "." + argv[4] + ".bpe";
 
     if (max_tokens > MAX_N_TOKENS) {
         std::cout << "Max tokens must be less than 65535" << std::endl;
@@ -70,6 +70,13 @@ int main(int argc, char* argv[]) {
     std::vector<std::thread> threads;
     std::vector<TokenType> new_seq;
     std::vector<bool> to_replace(seq.size(), false);
+
+    std::map<TokenType, std::string> alphabet_map;
+    // fill with alphabet
+    for (const auto& element : alphabet) {
+        alphabet_map[element.second] = element.first;
+    }
+
 
     while (true) {
         std::cout << "Tokens " << L;
@@ -93,15 +100,15 @@ int main(int argc, char* argv[]) {
         merged.push_back(rep);
         tokens[L] = rep;
 
+        std::string token_str = alphabet_map.at(std::get<0>(rep)) + alphabet_map.at(std::get<1>(rep));
+        alphabet_map[L] = token_str;
+
         std::cout << " transform data" << std::endl;
         transform_data(seq, merged, tokens, max_tokens, to_replace, rep, tf, new_seq, L, k);
 
-        std::string token1 = token_type_to_string(std::get<0>(rep), alphabet, tokens);
-        std::string token2 = token_type_to_string(std::get<1>(rep), alphabet, tokens);
+        token_to_length[L] = alphabet_map[L].size();
 
-        token_to_length[L] = token1.size() + token2.size();
-
-        std::cout << token1 << " " << token2 << " " << tf << " : "<< "replace: " << seq.size() << " -> " << new_seq.size() << std::endl;
+        std::cout << alphabet_map.at(std::get<0>(rep)) << " " << alphabet_map.at(std::get<1>(rep)) << " " << tf << " : "<< "replace: " << seq.size() << " -> " << new_seq.size() << std::endl;
 
         L += 1;
         if (max_tokens && L > max_tokens) {
@@ -109,21 +116,10 @@ int main(int argc, char* argv[]) {
         }
     }
     
-    // compute tokens as strings
-    std::map<TokenType, std::string> tokens_str_map;
-    for (const auto& element : tokens) {
-        std::string token_string = token_type_to_string(element.first, alphabet, tokens);
-        tokens_str_map[element.first] = token_string;
-    }
-    for (const auto& element : alphabet) {
-        tokens_str_map[element.second] = element.first;
-    }
-
-    
     std::map<std::string, std::vector<std::pair<size_t, size_t>>> kmer2poses;
     std::map<std::string, size_t> kmer2tf;
-    // init kmer2poses with empty vectors and keys from tokens_str_map
-    for (const auto& element : tokens_str_map) {
+    // init kmer2poses with empty vectors and keys from alphabet_map
+    for (const auto& element : alphabet_map) {
         kmer2poses[element.second] = std::vector<std::pair<size_t, size_t>>();
         kmer2tf[element.second] = 0;
     }
@@ -139,7 +135,7 @@ int main(int argc, char* argv[]) {
                 pos = 0;
                 out_file << "\n";
             } else {
-                std::string token_string = tokens_str_map.at(element);
+                std::string token_string = alphabet_map.at(element);
                 kmer2poses[token_string].push_back(std::make_pair(seqid, pos));
                 kmer2tf[token_string] += 1;
                 out_file << token_string << " ";
@@ -161,7 +157,7 @@ int main(int argc, char* argv[]) {
     }
     poses_file.close();
 
-    nlohmann::ordered_json json_data = get_json(tokens_str_map, tokens);
+    nlohmann::ordered_json json_data = get_json(alphabet_map, tokens);
 
     std::ofstream configFile(output_model_file);
     configFile << std::setw(2) << json_data << std::endl;

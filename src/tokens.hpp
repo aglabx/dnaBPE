@@ -65,6 +65,8 @@ struct tuple_hash {
     }
 };
 
+
+// NB: this function is not used in the current implementation and incorrect
 std::string token_type_to_string(TokenType token, const std::map<std::string, TokenType>& alphabet, const std::map<TokenType, kmer>& tokens) {
     
     // Check if the token is in the initial alphabet

@@ -12,7 +12,7 @@ typedef std::uint16_t TokenType;
 typedef std::tuple<TokenType, TokenType> kmer;
 
 
-ordered_json get_json(const std::map<TokenType, std::string>& tokens_str_map, const std::map<TokenType, kmer>& tokens) {
+ordered_json get_json(const std::map<TokenType, std::string>& alphabet_map, const std::map<TokenType, kmer>& tokens) {
     
     // Create a json object and populate it with the data
     ordered_json config;
@@ -152,15 +152,15 @@ ordered_json get_json(const std::map<TokenType, std::string>& tokens_str_map, co
 
     ordered_json merges = nlohmann::json::array();
 
-    for (auto const& [token_type, token_str] : tokens_str_map) {
+    for (auto const& [token_type, token_str] : alphabet_map) {
         if (token_type < 11) {
             continue;
         }
         model["vocab"][token_str] = token_type;
         // std::cout << token_type << " " << token_str << std::endl;
         auto [left, right] = tokens.at(token_type);
-        std::string left_str = tokens_str_map.at(left);
-        std::string right_str = tokens_str_map.at(right);
+        std::string left_str = alphabet_map.at(left);
+        std::string right_str = alphabet_map.at(right);
         merges.push_back(left_str+" "+right_str);
     }
     model["merges"] = merges;
