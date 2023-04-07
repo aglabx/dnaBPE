@@ -3,16 +3,15 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <set>
 #include <unordered_map>
-
-#include "../nlohmann/json.hpp"
 #include "tokens_model.hpp"
 #include "readers.hpp"
 #include "tokens.hpp"
 #include "preprocess.hpp"
 #include "core.hpp"
+#include "output.hpp"
 
-using json = nlohmann::json;
 
 
 std::vector<TokenType> get_data(std::string file_name, std::string format) {
@@ -49,10 +48,18 @@ int main(int argc, char* argv[]) {
     std::string format = argv[3];
     size_t max_tokens = std::stoul(argv[4]);
     size_t n_threads = std::stoul(argv[5]);
+    std::string n_tokens_suffix = argv[4];
 
-    std::string output_model_file = output_prefix + "." + argv[4] + ".json";
-    std::string output_poses_file = output_prefix + "." + argv[4] + ".poses";
-    std::string output_bpe_encoding_file = output_prefix + "." + argv[4] + ".bpe";
+
+    const std::set<size_t> snapshot_points = {
+        512,
+        1024,
+        2048,
+        4096,
+        8192,
+        16384,
+        32768,
+    };
 
     if (max_tokens > MAX_N_TOKENS) {
         std::cout << "Max tokens must be less than 65535" << std::endl;
@@ -72,9 +79,11 @@ int main(int argc, char* argv[]) {
     std::vector<bool> to_replace(seq.size(), false);
 
     std::map<TokenType, std::string> alphabet_map;
+    std::map<TokenType, size_t> alphabet_tf_map;
     // fill with alphabet
     for (const auto& element : alphabet) {
         alphabet_map[element.second] = element.first;
+        alphabet_tf_map[element.second] = 0;
     }
 
 
@@ -102,6 +111,7 @@ int main(int argc, char* argv[]) {
 
         std::string token_str = alphabet_map.at(std::get<0>(rep)) + alphabet_map.at(std::get<1>(rep));
         alphabet_map[L] = token_str;
+        alphabet_tf_map[L] = tf;
 
         std::cout << " transform data" << std::endl;
         transform_data(seq, merged, tokens, max_tokens, to_replace, rep, tf, new_seq, L, k);
@@ -111,59 +121,18 @@ int main(int argc, char* argv[]) {
         std::cout << alphabet_map.at(std::get<0>(rep)) << " " << alphabet_map.at(std::get<1>(rep)) << " " << tf << " : "<< "replace: " << seq.size() << " -> " << new_seq.size() << std::endl;
 
         L += 1;
+
+        // check that L in snapshot_points and then save resutls, and provide correct n_tokens_suffix
+        if (snapshot_points.find(L) != snapshot_points.end()) {
+            save_snapshot(tokens, seq, alphabet_map, alphabet_tf_map, output_prefix, std::to_string(L), false);
+        }
+
         if (max_tokens && L > max_tokens) {
             break;
         }
     }
-    
-    std::map<std::string, std::vector<std::pair<size_t, size_t>>> kmer2poses;
-    std::map<std::string, size_t> kmer2tf;
-    // init kmer2poses with empty vectors and keys from alphabet_map
-    for (const auto& element : alphabet_map) {
-        kmer2poses[element.second] = std::vector<std::pair<size_t, size_t>>();
-        kmer2tf[element.second] = 0;
-    }
-    
-    
-    std::ofstream out_file(output_bpe_encoding_file);
-    size_t pos = 0;
-    size_t seqid = 0;
-    if (out_file.is_open()) {
-        for (const auto& element : seq) {
-            if (element == 5) {
-                seqid += 1;
-                pos = 0;
-                out_file << "\n";
-            } else {
-                std::string token_string = alphabet_map.at(element);
-                kmer2poses[token_string].push_back(std::make_pair(seqid, pos));
-                kmer2tf[token_string] += 1;
-                out_file << token_string << " ";
-                pos += token_string.size();
-            }
-        }
-        out_file << std::endl;
-        out_file.close();
-    }
 
-    std::ofstream poses_file(output_poses_file);
-    // write poses to file and add the secone argument tf from kmer2tf
-    for (const auto& element : kmer2poses) {
-        poses_file << element.first << "\t" << kmer2tf[element.first] << "\t";
-        for (const auto& pos : element.second) {
-            poses_file << pos.first << ":" << pos.second << " ";
-        }
-        poses_file << std::endl;
-    }
-    poses_file.close();
-
-    nlohmann::ordered_json json_data = get_json(alphabet_map, tokens);
-
-    std::ofstream configFile(output_model_file);
-    configFile << std::setw(2) << json_data << std::endl;
-    configFile.close();
-
-    std::cout << "Config saved to config.json" << std::endl;
+    save_snapshot(tokens, seq, alphabet_map, alphabet_tf_map, output_prefix, n_tokens_suffix, true);
 
     return 0;
 }
