@@ -15,7 +15,7 @@
 
 using json = nlohmann::json;
 
-void save_snapshot(const std::unordered_map<TokenType, kmer>& tokens, const std::vector<TokenType>& seq, const std::unordered_map<TokenType, std::string>& alphabet_map, std::unordered_map<TokenType, size_t>& alphabet_tf_map, const std::string& output_prefix, std::string n_tokens_suffix,  bool save_seq=false) {
+void save_snapshot(const std::unordered_map<TokenType, Kmer>& tokens, std::vector<Kmer>& merged, std::unordered_map<Kmer, TokenType> rev_tokens, const std::vector<TokenType>& seq, const std::unordered_map<TokenType, std::string>& alphabet_map, std::unordered_map<TokenType, size_t>& alphabet_tf_map, const std::string& output_prefix, std::string n_tokens_suffix,  bool save_seq=false) {
 
     std::string output_bpe_encoding_file = output_prefix + "." + n_tokens_suffix + ".bpe";
     std::string output_poses_file = output_prefix + "." + n_tokens_suffix + ".poses";
@@ -62,16 +62,21 @@ void save_snapshot(const std::unordered_map<TokenType, kmer>& tokens, const std:
 
     std::ofstream poses_file(output_poses_file);
     // write poses to file and add the secone argument tf from kmer2tf
-    for (const auto& [token, kmer] : alphabet_map) {
-        poses_file << kmer << "\t" << alphabet_tf_map.at(token) << "\t" << kmer2tf.at(kmer) << "\t";
-        for (const auto& pos : kmer2poses.at(kmer)) {
+    for (const Kmer& kmer_ : merged) {
+        TokenType token = rev_tokens[kmer_];
+        std::string kmer_seq = alphabet_map.at(token);
+        if (kmer2tf.at(kmer_seq) == 0) {
+            continue;
+        }
+        poses_file << kmer_seq << "\t" << alphabet_tf_map.at(token) << "\t" << kmer2tf.at(kmer_seq) << "\t";
+        for (const auto& pos : kmer2poses.at(kmer_seq)) {
             poses_file << pos.first << ":" << pos.second << " ";
         }
         poses_file << std::endl;
     }
     poses_file.close();
 
-    nlohmann::ordered_json json_data = get_json(alphabet_map, tokens);
+    nlohmann::ordered_json json_data = get_json(alphabet_map, tokens, merged, rev_tokens);
 
     std::ofstream configFile(output_model_file);
     configFile << std::setw(2) << json_data << std::endl;
