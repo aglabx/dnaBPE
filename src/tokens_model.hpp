@@ -4,15 +4,13 @@
 
 #include "../nlohmann/json.hpp"
 #include <iostream>
+#include "tokens.hpp"
 
 using json = nlohmann::json;
 using ordered_json = nlohmann::ordered_json;
 
-typedef std::uint16_t TokenType;
-typedef std::tuple<TokenType, TokenType> kmer;
 
-
-ordered_json get_json(const std::unordered_map<TokenType, std::string>& alphabet_map, const std::unordered_map<TokenType, kmer>& tokens) {
+ordered_json get_json(const std::unordered_map<TokenType, std::string>& alphabet_map, const std::unordered_map<TokenType, Kmer>& tokens, std::vector<Kmer>& merged_tokens, std::unordered_map<Kmer, TokenType> rev_tokens) {
     
     // Create a json object and populate it with the data
     ordered_json config;
@@ -152,7 +150,9 @@ ordered_json get_json(const std::unordered_map<TokenType, std::string>& alphabet
 
     ordered_json merges = nlohmann::json::array();
 
-    for (auto const& [token_type, token_str] : alphabet_map) {
+    for (const Kmer& kmer_ : merged_tokens) {
+        TokenType token_type = rev_tokens.at(kmer_);
+        std::string token_str = alphabet_map.at(token_type);
         if (token_type < 11) {
             continue;
         }

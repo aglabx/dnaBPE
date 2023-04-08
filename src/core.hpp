@@ -10,11 +10,12 @@
 #include <unordered_map>
 #include "tokens.hpp"
 #include <iostream>
+#include "container.hpp"
+
+typedef std::unordered_map<Kmer, size_t> Counter;
 
 
-typedef std::unordered_map<kmer, size_t> Counter;
-
-Counter count_pairs(const std::vector<TokenType> &bseq, std::unordered_map<kmer, std::unordered_set<size_t>>& cache) {
+Counter count_pairs(const std::vector<TokenType> &bseq, std::unordered_map<Kmer, std::unordered_set<size_t>>& cache) {
     Counter c;
     for (size_t i = 0; i < bseq.size() - 1; i++) {
         TokenType a = bseq[i];
@@ -22,7 +23,7 @@ Counter count_pairs(const std::vector<TokenType> &bseq, std::unordered_map<kmer,
         if (a <= N_HELP_TOKENS || b <= N_HELP_TOKENS) {
             continue;
         }
-        kmer kmer_ = std::make_tuple(a, b);
+        Kmer kmer_ = std::make_tuple(a, b);
 
         if (!cache.contains(kmer_)) {
             cache[kmer_] = std::unordered_set<size_t>();
@@ -33,12 +34,13 @@ Counter count_pairs(const std::vector<TokenType> &bseq, std::unordered_map<kmer,
     return c;
 }
 
-void replace(const kmer&token, std::vector<TokenType> &bseq, const TokenType L, const std::unordered_map<kmer, TokenType>& rev_tokens, Counter& positive_c, Counter& negative_c, std::vector<bool>& to_replace, std::unordered_map<TokenType, std::string>& alphabet_map, std::unordered_map<kmer, std::unordered_set<size_t>>& cache, uint k=2) {
+
+void replace(const Kmer&token, std::vector<TokenType> &bseq, const TokenType L, const std::unordered_map<Kmer, TokenType>& rev_tokens, Counter& positive_c, Counter& negative_c, std::vector<bool>& to_replace, std::unordered_map<TokenType, std::string>& alphabet_map, uint k=2) {
 
     std::fill(to_replace.begin(), to_replace.end(), false);
     for (size_t i = 0; i < bseq.size() - k + 1; i++) {
         if (bseq[i] > N_HELP_TOKENS && bseq[i+1] > N_HELP_TOKENS) {
-            kmer kmer_ = std::make_tuple(bseq[i], bseq[i+1]);
+            Kmer kmer_ = std::make_tuple(bseq[i], bseq[i+1]);
             if (kmer_ == token) {
                 to_replace[i] = true;
             }
@@ -61,18 +63,20 @@ void replace(const kmer&token, std::vector<TokenType> &bseq, const TokenType L, 
                     // Do nothing
                 } else {
                     if (bseq[i-1] > N_HELP_TOKENS) {
-                        kmer prev_neg = std::make_tuple(bseq[i - 1], std::get<0>(token));
+                        Kmer prev_neg = std::make_tuple(bseq[i - 1], std::get<0>(token));
                         negative_c[prev_neg]++;
                     }
                     
                 }
             }
 
+            
+
             TokenType next_token = bseq[i + 2];
 
             if (i + 2 < bseq.size()) {
                 if (next_token > N_HELP_TOKENS) {
-                    kmer next_neg = std::make_tuple(std::get<1>(token), next_token);
+                    Kmer next_neg = std::make_tuple(std::get<1>(token), next_token);
                     negative_c[next_neg]++;
                 }
             }
@@ -80,7 +84,7 @@ void replace(const kmer&token, std::vector<TokenType> &bseq, const TokenType L, 
             if (!new_bseq.empty()) {
                 if (new_bseq.back() > N_HELP_TOKENS) {
                         
-                    kmer prev_pair = std::make_tuple(new_bseq.back(), current_token);
+                    Kmer prev_pair = std::make_tuple(new_bseq.back(), current_token);
                     if (prev_pair != token) {
                         positive_c[prev_pair]++;
                     }
@@ -93,7 +97,7 @@ void replace(const kmer&token, std::vector<TokenType> &bseq, const TokenType L, 
             if (i + 3 < bseq.size() && std::make_tuple(next_token, bseq[i + 3]) == token) {
                 // Do nothing
             } else if (i + 2 < bseq.size() && next_token > N_HELP_TOKENS ) {
-                kmer next_pair = std::make_tuple(current_token, next_token);
+                Kmer next_pair = std::make_tuple(current_token, next_token);
                 positive_c[next_pair]++;
             }
             i += 2;
@@ -109,6 +113,20 @@ void replace(const kmer&token, std::vector<TokenType> &bseq, const TokenType L, 
     std::cout << " done." << std::endl;
 }
 
+Counter count_pairs(const std::vector<TokenType> &bseq) {
+    Counter c;
+    for (size_t i = 0; i < bseq.size() - 1; i++) {
+        TokenType a = bseq[i];
+        TokenType b = bseq[i + 1];
+        if (a <= N_HELP_TOKENS || b <= N_HELP_TOKENS) {
+            continue;
+        }
+        Kmer kmer_ = std::make_tuple(a, b);
+
+        c[kmer_]++;
+    }
+    return c;
+}
 
 void compute_freqs_seq(const std::vector<TokenType>& seq, std::vector<std::atomic_size_t>& c, TokenType L) {
     for (size_t i = 0; i < seq.size() - 1; ++i) {
@@ -141,9 +159,9 @@ void compute_freqs_par(const std::vector<TokenType>& seq, std::vector<std::atomi
     threads.clear();
 }
 
-std::pair<std::size_t, kmer> found_max(const std::vector<std::atomic_size_t>& c, TokenType L) {
+std::pair<std::size_t, Kmer> found_max(const std::vector<std::atomic_size_t>& c, TokenType L) {
     size_t max_count = 0;
-    kmer rep;
+    Kmer rep;
     for (size_t i=0; i < c.size(); ++i) {
         size_t current_count = c[i].load();
         if (current_count > max_count) {
@@ -154,14 +172,14 @@ std::pair<std::size_t, kmer> found_max(const std::vector<std::atomic_size_t>& c,
     return std::make_pair(max_count, rep);
 }
 
-void transform_data(std::vector<TokenType> &seq, std::vector<kmer> &merged, std::unordered_map<TokenType, kmer> &tokens, size_t max_tokens, std::vector<int>& to_replace, kmer& rep, size_t tf, std::vector<TokenType>& new_seq,  TokenType L, uint k=2) {
+void transform_data(std::vector<TokenType> &seq, std::vector<Kmer> &merged, std::unordered_map<TokenType, Kmer> &tokens, size_t max_tokens, std::vector<int>& to_replace, Kmer& rep, size_t tf, std::vector<TokenType>& new_seq,  TokenType L, uint k=2) {
     
     
 
     std::fill(to_replace.begin(), to_replace.end(), 0);
     for (size_t i = 0; i < seq.size() - k + 1; i++) {
         if (seq[i] > N_HELP_TOKENS && seq[i+1] > N_HELP_TOKENS) {
-            kmer kmer_ = std::make_tuple(seq[i], seq[i+1]);
+            Kmer kmer_ = std::make_tuple(seq[i], seq[i+1]);
             if (kmer_ == rep) {
                 to_replace[i] = 1;
             }

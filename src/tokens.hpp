@@ -7,12 +7,12 @@
 #include <map>
 #include <numeric>
 
-typedef std::uint16_t TokenType;
-
 const uint N_HELP_TOKENS = 6;
 const uint MAX_N_TOKENS = 65535;
 
-typedef std::tuple<TokenType, TokenType> kmer;
+typedef std::uint16_t TokenType;
+typedef std::tuple<TokenType, TokenType> Kmer;
+
 
 namespace std {
     template<>
@@ -84,7 +84,7 @@ struct tuple_hash {
 
 
 // NB: this function is not used in the current implementation and incorrect
-std::string token_type_to_string(TokenType token, const std::unordered_map<std::string, TokenType>& alphabet, const std::unordered_map<TokenType, kmer>& tokens) {
+std::string token_type_to_string(TokenType token, const std::unordered_map<std::string, TokenType>& alphabet, const std::unordered_map<TokenType, Kmer>& tokens) {
     
     // Check if the token is in the initial alphabet
     for (const auto& element : alphabet) {
@@ -96,7 +96,7 @@ std::string token_type_to_string(TokenType token, const std::unordered_map<std::
     // Check if the token is in the tokens map
     auto token_iter = tokens.find(token);
     if (token_iter != tokens.end()) {
-        kmer kmer_ = token_iter->second;
+        Kmer kmer_ = token_iter->second;
         TokenType token1 = std::get<0>(kmer_);
         TokenType token2 = std::get<1>(kmer_);
         return token_type_to_string(token1, alphabet, tokens) + token_type_to_string(token2, alphabet, tokens);
