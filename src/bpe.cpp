@@ -67,11 +67,11 @@ int main(int argc, char* argv[]) {
     
     std::vector<TokenType> seq = get_data(file_name, format);
 
-    std::vector<kmer> merged;
+    std::vector<Kmer> merged;
     uint k = 2;
     TokenType L = alphabet.size();
-    std::unordered_map<TokenType, kmer> tokens;
-    std::unordered_map<kmer, TokenType> rev_tokens;
+    std::unordered_map<TokenType, Kmer> tokens;
+    std::unordered_map<Kmer, TokenType> rev_tokens;
 
     std::unordered_map<TokenType, size_t> token_to_length;
 
@@ -107,7 +107,7 @@ int main(int argc, char* argv[]) {
         std::cout << " find max";
         auto max_result = found_max(c, L);
         size_t tf = max_result.first;
-        kmer rep = max_result.second;
+        Kmer rep = max_result.second;
         if (tf == 1) {
             break;
         }
