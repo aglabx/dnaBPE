@@ -67,11 +67,11 @@ int main(int argc, char* argv[]) {
     
     std::vector<TokenType> seq = get_data(file_name, format);
 
-    std::vector<kmer> merged;
+    std::vector<Kmer> merged;
     uint k = 2;
     TokenType L = alphabet.size();
-    std::unordered_map<TokenType, kmer> tokens;
-    std::unordered_map<kmer, TokenType> rev_tokens;
+    std::unordered_map<TokenType, Kmer> tokens;
+    std::unordered_map<Kmer, TokenType> rev_tokens;
 
     std::unordered_map<TokenType, size_t> token_to_length;
 
@@ -87,13 +87,13 @@ int main(int argc, char* argv[]) {
         alphabet_tf_map[element.second] = 0;
     }
 
-    std::vector<kmer> priority_queue;
-    std::unordered_map<kmer, int> freqs;
+    std::vector<Kmer> priority_queue;
+    std::unordered_map<Kmer, int> freqs;
 
 
     // precompute
 
-    std::unordered_map<kmer, std::unordered_set<size_t>> cache;
+    std::unordered_map<Kmer, std::unordered_set<size_t>> cache;
 
     Counter c = count_pairs(seq, cache);
     for (const auto &item_tf : c) {
@@ -108,7 +108,6 @@ int main(int argc, char* argv[]) {
     int pos = 0;
 
     std::string status;
-    
 
     while (i >= 0) {
 
@@ -118,7 +117,7 @@ int main(int argc, char* argv[]) {
         //     std::cout << alphabet_map.at(std::get<0>(item_tf)) << " " << alphabet_map.at(std::get<1>(item_tf)) << " " << freqs[item_tf] << std::endl;
         // }
 
-        kmer rep = priority_queue.at(i);
+        Kmer rep = priority_queue.at(i);
         int tf = freqs.at(rep);
         if (tf < 2) {
             break;
@@ -150,7 +149,7 @@ int main(int argc, char* argv[]) {
 
         replace(rep, seq, L, rev_tokens, positive_c, negative_c, to_replace, alphabet_map, cache);
 
-        
+
         for (const auto& [pair, tf] : positive_c) {
             // print with freqs before and after
             // std::cout << "Positive " << alphabet_map.at(std::get<0>(pair)) << " " << alphabet_map.at(std::get<1>(pair)) << " " << tf << " " << freqs[pair] << std::endl;
