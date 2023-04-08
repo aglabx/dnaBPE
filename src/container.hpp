@@ -8,6 +8,8 @@
 #include <unordered_map>
 #include <iostream>
 #include <unordered_set>
+#include <chrono>
+#include <queue>
 
 
 typedef std::unordered_map<Kmer, size_t> Counter;
@@ -69,7 +71,7 @@ public:
         for (size_t i = 0; i < seq.size() - 1; i++) {
 
             if (i && i % 1000000 == 0) {
-                std::cout << "Processed " << i << " tokens from " << seq.size() << std::endl;
+                std::cout << "Processed " << 100 * i / seq.size() << "%% tokens from " << seq.size() << std::endl;
             }
 
             TokenType a = seq[i];
@@ -80,6 +82,10 @@ public:
                 help_token = true;
             }
             append(i, pair, help_token);
+        }
+
+        for (const auto& [kmer, count] : counter) {
+            max_heap.push(std::make_pair(count, kmer));
         }
     }
 
@@ -194,6 +200,8 @@ public:
         // T|T 2 -1 -1
         // TT|TT + 1
 
+        std::unordered_set<Kmer> touched_kmers;
+
         Node* currentNode = indexMap[index];
 
         if (currentNode->pair != rep) {
@@ -220,7 +228,10 @@ public:
                 positions[prev_kmer].erase(prevNode->index);
 
                 counter[left_kmer]++;
-                positions[left_kmer].insert(prevNode->index);    
+                positions[left_kmer].insert(prevNode->index);  
+
+                touched_kmers.insert(prev_kmer);
+                touched_kmers.insert(left_kmer);  
             }
             
 
@@ -228,6 +239,7 @@ public:
         }
 
         Node* nextNode = currentNode->next;
+        
 
         if (nextNode != nullptr) {
             Kmer next_kmer = nextNode->pair;
@@ -246,6 +258,9 @@ public:
 
                 counter[right_kmer]++;
                 positions[right_kmer].insert(nextNode->index);
+                
+                touched_kmers.insert(next_kmer);
+                touched_kmers.insert(right_kmer);
             }
 
             nextNode->pair = right_kmer;
@@ -255,7 +270,15 @@ public:
         // Remove the current node
         // std::cout << "Removing node at index: " << index << std::endl;
         removeAtIndex(index);
+
+        touched_kmers.insert(rep);
         // std::cout << "Counter size for rep is " << counter[rep] << std::endl;
+
+        for (const auto& kmer : touched_kmers) {
+            if (counter[kmer] > 0) {
+                max_heap.push(std::make_pair(counter[kmer], kmer));
+            }
+        }
         
     }
 
@@ -263,15 +286,19 @@ public:
         if (counter.empty()) {
             throw std::runtime_error("The container is empty, cannot find the most frequent pair.");
         }
-        Kmer most_frequent_pair;
-        size_t max_count = 0;
-        for (const auto& entry : counter) {
-            if (entry.second > max_count) {
-                max_count = entry.second;
-                most_frequent_pair = entry.first;
+
+        while (!max_heap.empty()) {
+            auto top_entry = max_heap.top();
+            size_t count = top_entry.first;
+            Kmer kmer = top_entry.second;
+
+            if (counter[kmer] == count) {
+                return std::pair(kmer, count);
             }
+            max_heap.pop();
         }
-        return std::pair(most_frequent_pair, max_count);
+
+        throw std::runtime_error("Could not find the most frequent pair.");
     }
 
     size_t size() {
@@ -324,6 +351,7 @@ private:
 
     size_t size_;
     std::unordered_map<size_t, Node*> indexMap;
+    std::priority_queue<std::pair<size_t, Kmer>> max_heap;
 
 };
 

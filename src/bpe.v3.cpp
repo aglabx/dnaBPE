@@ -12,7 +12,7 @@
 #include "core.hpp"
 #include "output.hpp"
 #include "container.hpp"
-
+#include <chrono>
 
 
 std::vector<TokenType> get_data(std::string& file_name, std::string& format) {
@@ -100,6 +100,8 @@ int main(int argc, char* argv[]) {
     std::string status;
     Kmer rep;
     size_t tf;
+    auto start_time = std::chrono::high_resolution_clock::now();
+    auto end_time = std::chrono::high_resolution_clock::now();
 
     while (true) {
 
@@ -112,6 +114,12 @@ int main(int argc, char* argv[]) {
         std::tie(rep, tf) = container.get_most_frequent_pair();
 
         if (tf < 2) {
+            break;
+        }
+        if (max_tokens && L > max_tokens) {
+            break;
+        }
+        if (L >= MAX_N_TOKENS) {
             break;
         }
         
@@ -128,16 +136,25 @@ int main(int argc, char* argv[]) {
         alphabet_tf_map[L] = tf;
         token_to_length[L] = alphabet_map[L].size();
 
-        std::cout << "Tokens " << L << " " << alphabet_map.at(std::get<0>(rep)) << " " << alphabet_map.at(std::get<1>(rep)) << " " << token_str << " " << tf << " : "<< "size: " << container.size() << std::endl;
+        if (L < 1000 || L % 1000 == 0) {
+            
+            end_time = std::chrono::high_resolution_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
+
+            std::cout << "Tokens " << L << " " << alphabet_map.at(std::get<0>(rep)) << " " << alphabet_map.at(std::get<1>(rep)) << " " << token_str << " " << tf << " : "<< "size: " << container.size() << " execution time: " << duration << " milliseconds" << std::endl;
         pos++;
+            start_time = std::chrono::high_resolution_clock::now();
+        } 
+
+        
 
         size_t prev_len = seq.size();
 
         auto positions = container.get_positions(rep);
 
-        std::cout << "Positions: " << positions.size() << std::endl;
+        // std::cout << "Positions: " << positions.size() << std::endl;
 
-        std::cout << "Collapsing..." << std::endl;
+        // std::cout << "Collapsing..." << std::endl;
         for (size_t index: positions) {
             // print parameters of call and rep and L
             // std::cout << "index: " << index << " rep: " << alphabet_map.at(std::get<0>(rep)) << " " << alphabet_map.at(std::get<1>(rep)) << " L: " << L << std::endl;
@@ -149,15 +166,13 @@ int main(int argc, char* argv[]) {
 
         L += 1;
 
-        std::cout << " new size: " << seq.size() << std::endl;
+        // std::cout << " new size: " << seq.size() << std::endl;
 
         if (snapshot_points.find(L) != snapshot_points.end()) {
             save_snapshot(tokens, merged, rev_tokens, seq, alphabet_map, alphabet_tf_map, output_prefix, std::to_string(L), false);
         }
 
-        if (max_tokens && L > max_tokens) {
-            break;
-        }
+        
 
         // container.print_counter(alphabet_map);
 
