@@ -77,7 +77,7 @@ int main(int argc, char* argv[]) {
 
     std::vector<std::thread> threads;
     std::vector<TokenType> new_seq;
-    std::vector<bool> to_replace(seq.size(), false);
+    std::vector<int> to_replace(seq.size(), false);
 
     std::unordered_map<TokenType, std::string> alphabet_map;
     std::unordered_map<TokenType, size_t> alphabet_tf_map;
@@ -129,9 +129,8 @@ int main(int argc, char* argv[]) {
 
         L += 1;
 
-        // check that L in snapshot_points and then save resutls, and provide correct n_tokens_suffix
         if (snapshot_points.find(L) != snapshot_points.end()) {
-            save_snapshot(tokens, seq, alphabet_map, alphabet_tf_map, output_prefix, std::to_string(L), false);
+            save_snapshot(tokens, merged, rev_tokens, seq, alphabet_map, alphabet_tf_map, output_prefix, std::to_string(L), false);
         }
 
         if (max_tokens && L > max_tokens) {
@@ -139,7 +138,7 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    save_snapshot(tokens, seq, alphabet_map, alphabet_tf_map, output_prefix, n_tokens_suffix, true);
+    save_snapshot(tokens, merged, rev_tokens, seq, alphabet_map, alphabet_tf_map, output_prefix, n_tokens_suffix, true);
 
     return 0;
 }
