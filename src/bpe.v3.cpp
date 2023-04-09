@@ -50,8 +50,6 @@ int main(int argc, char* argv[]) {
     size_t max_tokens = std::stoul(argv[4]);
     size_t n_threads = std::stoul(argv[5]);
     std::string n_tokens_suffix = argv[4];
-
-
     const std::set<size_t> snapshot_points = {
         512,
         1024,
@@ -69,16 +67,20 @@ int main(int argc, char* argv[]) {
     
     std::vector<TokenType> seq = get_data(file_name, format);
 
+    // we keep kmer only in merged, in other places we use kmer_id
     std::vector<Kmer> merged;
-    uint k = 2;
+    std::unordered_map<Kmer, size_t, TupleHash> kmer2kmer_id;
+    std::unordered_map<size_t, Kmer> kmer_id2kmer;
+
+
     TokenType L = alphabet.size();
-    std::unordered_map<TokenType, Kmer> tokens;
-    std::unordered_map<Kmer, TokenType> rev_tokens;
+
+    std::unordered_map<TokenType, size_t> tokens;
+    std::unordered_map<size_t, TokenType> rev_tokens;
 
     std::unordered_map<TokenType, size_t> token_to_length;
 
     std::vector<std::thread> threads;
-    std::vector<bool> to_replace(seq.size(), 0);
 
     std::unordered_map<TokenType, std::string> alphabet_map;
     std::unordered_map<TokenType, size_t> alphabet_tf_map;
@@ -89,20 +91,20 @@ int main(int argc, char* argv[]) {
     }
 
     // precompute
-
+    auto start_time = std::chrono::high_resolution_clock::now();
     std::cout << "Filling to SequenceContainer" << std::endl;
-    SequenceContainer container(seq, n_threads);
+    SequenceContainer container(seq, kmer2kmer_id, kmer_id2kmer, n_threads);
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
+    std::cout << "Filling to SequenceContainer took " << duration << " ms" << std::endl;
+
     seq.clear(); seq.resize(0);
 
-
     int pos = 0;
-
     std::string status;
-    Kmer rep;
+    size_t rep;
     size_t tf;
-    auto start_time = std::chrono::high_resolution_clock::now();
-    auto end_time = std::chrono::high_resolution_clock::now();
-
+    
     while (true) {
 
         // print priority_queue and freqs
@@ -126,11 +128,12 @@ int main(int argc, char* argv[]) {
         // std::cin >> status;
         
         //// Fill resulting structures
-        merged.push_back(rep);
+        Kmer rep_kmer = kmer_id2kmer.at(rep);
+        merged.emplace_back(rep_kmer);
         tokens[L] = rep;
         rev_tokens[rep] = L;
-        TokenType a = std::get<0>(rep);
-        TokenType b = std::get<1>(rep);
+        TokenType a = std::get<0>(rep_kmer);
+        TokenType b = std::get<1>(rep_kmer);
         std::string token_str = alphabet_map.at(a) + alphabet_map.at(b);
         alphabet_map[L] = token_str;
         alphabet_tf_map[L] = tf;
@@ -141,35 +144,20 @@ int main(int argc, char* argv[]) {
             end_time = std::chrono::high_resolution_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
 
-            std::cout << "Tokens " << L << " " << alphabet_map.at(std::get<0>(rep)) << " " << alphabet_map.at(std::get<1>(rep)) << " " << token_str << " " << tf << " : "<< "size: " << container.size() << " execution time: " << duration << " milliseconds" << std::endl;
+            std::cout << "Tokens " << L << " " << alphabet_map.at(std::get<0>(rep_kmer)) << " " << alphabet_map.at(std::get<1>(rep_kmer)) << " " << token_str << " " << tf << " : "<< "size: " << container.size() << " execution time: " << duration << " milliseconds" << std::endl;
         pos++;
             start_time = std::chrono::high_resolution_clock::now();
         } 
 
-        
+        container.process_repeat(rep, L, kmer2kmer_id, kmer_id2kmer);
 
-        size_t prev_len = seq.size();
-
-        auto positions = container.get_positions(rep);
-
-        // std::cout << "Positions: " << positions.size() << std::endl;
-
-        // std::cout << "Collapsing..." << std::endl;
-        for (size_t index: positions) {
-            // print parameters of call and rep and L
-            // std::cout << "index: " << index << " rep: " << alphabet_map.at(std::get<0>(rep)) << " " << alphabet_map.at(std::get<1>(rep)) << " L: " << L << std::endl;
-            container.collapse(rep, index, L);
-            // container.display(alphabet_map);
-            // std::cout << "Continue?" << std::endl;
-            // std::cin >> status;
-        }
 
         L += 1;
 
         // std::cout << " new size: " << seq.size() << std::endl;
 
         if (snapshot_points.find(L) != snapshot_points.end()) {
-            save_snapshot(tokens, merged, rev_tokens, seq, alphabet_map, alphabet_tf_map, output_prefix, std::to_string(L), false);
+            save_snapshot(tokens, merged, kmer2kmer_id, rev_tokens, seq, alphabet_map, alphabet_tf_map, output_prefix, std::to_string(L), false);
         }
 
         
@@ -180,9 +168,9 @@ int main(int argc, char* argv[]) {
         // std::cin >> status;
     }
 
-    std::vector<TokenType> raw_seq = container.get_as_vector();
-
-    save_snapshot(tokens, merged, rev_tokens, raw_seq, alphabet_map, alphabet_tf_map, output_prefix, std::to_string(L), true);
+    std::vector<TokenType> raw_seq = container.get_as_vector(kmer_id2kmer);
+    
+    save_snapshot(tokens, merged, kmer2kmer_id, rev_tokens, seq, alphabet_map, alphabet_tf_map, output_prefix, std::to_string(L), true);
     
 
     return 0;

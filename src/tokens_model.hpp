@@ -10,7 +10,7 @@ using json = nlohmann::json;
 using ordered_json = nlohmann::ordered_json;
 
 
-ordered_json get_json(const std::unordered_map<TokenType, std::string>& alphabet_map, const std::unordered_map<TokenType, Kmer>& tokens, std::vector<Kmer>& merged_tokens, std::unordered_map<Kmer, TokenType> rev_tokens) {
+ordered_json get_json(const std::unordered_map<TokenType, std::string>& alphabet_map, const std::unordered_map<TokenType, size_t>& tokens, std::vector<Kmer>& merged_tokens,  std::unordered_map<Kmer, size_t, TupleHash> kmer2kmer_id, std::unordered_map<size_t, TokenType> rev_tokens) {
     
     // Create a json object and populate it with the data
     ordered_json config;
@@ -151,14 +151,15 @@ ordered_json get_json(const std::unordered_map<TokenType, std::string>& alphabet
     ordered_json merges = nlohmann::json::array();
 
     for (const Kmer& kmer_ : merged_tokens) {
-        TokenType token_type = rev_tokens.at(kmer_);
+        size_t kmer_id = kmer2kmer_id.at(kmer_);
+        TokenType token_type = rev_tokens.at(kmer_id);
         std::string token_str = alphabet_map.at(token_type);
         if (token_type < 11) {
             continue;
         }
         model["vocab"][token_str] = token_type;
         // std::cout << token_type << " " << token_str << std::endl;
-        auto [left, right] = tokens.at(token_type);
+        auto [left, right] = kmer_;
         std::string left_str = alphabet_map.at(left);
         std::string right_str = alphabet_map.at(right);
         merges.push_back(left_str+" "+right_str);

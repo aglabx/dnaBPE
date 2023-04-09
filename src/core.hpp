@@ -15,24 +15,24 @@
 typedef std::unordered_map<Kmer, size_t> Counter;
 
 
-Counter count_pairs(const std::vector<TokenType> &bseq, std::unordered_map<Kmer, std::unordered_set<size_t>>& cache) {
-    Counter c;
-    for (size_t i = 0; i < bseq.size() - 1; i++) {
-        TokenType a = bseq[i];
-        TokenType b = bseq[i + 1];
-        if (a <= N_HELP_TOKENS || b <= N_HELP_TOKENS) {
-            continue;
-        }
-        Kmer kmer_ = std::make_tuple(a, b);
+// Counter count_pairs(const std::vector<TokenType> &bseq, std::unordered_map<Kmer, std::unordered_set<size_t>>& cache) {
+//     Counter c;
+//     for (size_t i = 0; i < bseq.size() - 1; i++) {
+//         TokenType a = bseq[i];
+//         TokenType b = bseq[i + 1];
+//         if (a <= N_HELP_TOKENS || b <= N_HELP_TOKENS) {
+//             continue;
+//         }
+//         Kmer kmer_ = std::make_tuple(a, b);
 
-        if (!cache.contains(kmer_)) {
-            cache[kmer_] = std::unordered_set<size_t>();
-        }    
-        cache[kmer_].insert(i);
-        c[kmer_]++;
-    }
-    return c;
-}
+//         if (!cache.contains(kmer_)) {
+//             cache[kmer_] = std::unordered_set<size_t>();
+//         }    
+//         cache[kmer_].insert(i);
+//         c[kmer_]++;
+//     }
+//     return c;
+// }
 
 
 void replace(const Kmer&token, std::vector<TokenType> &bseq, const TokenType L, const std::unordered_map<Kmer, TokenType>& rev_tokens, Counter& positive_c, Counter& negative_c, std::vector<bool>& to_replace, std::unordered_map<TokenType, std::string>& alphabet_map, uint k=2) {
@@ -48,7 +48,6 @@ void replace(const Kmer&token, std::vector<TokenType> &bseq, const TokenType L, 
     }
 
     std::vector<TokenType> new_bseq;
-    size_t i = 0;
 
     TokenType current_token = rev_tokens.at(token);
     std::string current_token_str = alphabet_map.at(current_token);
@@ -113,20 +112,20 @@ void replace(const Kmer&token, std::vector<TokenType> &bseq, const TokenType L, 
     std::cout << " done." << std::endl;
 }
 
-Counter count_pairs(const std::vector<TokenType> &bseq) {
-    Counter c;
-    for (size_t i = 0; i < bseq.size() - 1; i++) {
-        TokenType a = bseq[i];
-        TokenType b = bseq[i + 1];
-        if (a <= N_HELP_TOKENS || b <= N_HELP_TOKENS) {
-            continue;
-        }
-        Kmer kmer_ = std::make_tuple(a, b);
+// Counter count_pairs(const std::vector<TokenType> &bseq) {
+//     Counter c;
+//     for (size_t i = 0; i < bseq.size() - 1; i++) {
+//         TokenType a = bseq[i];
+//         TokenType b = bseq[i + 1];
+//         if (a <= N_HELP_TOKENS || b <= N_HELP_TOKENS) {
+//             continue;
+//         }
+//         Kmer kmer_ = std::make_tuple(a, b);
 
-        c[kmer_]++;
-    }
-    return c;
-}
+//         c[kmer_]++;
+//     }
+//     return c;
+// }
 
 void compute_freqs_seq(const std::vector<TokenType>& seq, std::vector<std::atomic_size_t>& c, TokenType L) {
     for (size_t i = 0; i < seq.size() - 1; ++i) {

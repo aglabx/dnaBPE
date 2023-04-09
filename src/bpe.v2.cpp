@@ -126,7 +126,7 @@ int main(int argc, char* argv[]) {
         
         // std::cin >> status;
         
-        merged.push_back(rep);
+        merged.emplace_back(rep);
         tokens[L] = rep;
         rev_tokens[rep] = L;
 
@@ -141,8 +141,6 @@ int main(int argc, char* argv[]) {
         std::cout << "Tokens " << L << " " << alphabet_map.at(std::get<0>(rep)) << " " << alphabet_map.at(std::get<1>(rep)) << " " << token_str << " " << tf << " : "<< "size: " << seq.size() << " cutoff: " << current_cutoff << " queue size: " << priority_queue.size() << std::endl;
         
         pos++;
-
-        size_t prev_len = seq.size();
 
         Counter positive_c;
         Counter negative_c;
@@ -198,7 +196,7 @@ int main(int argc, char* argv[]) {
             std::cout << "Recomputing" << std::endl;
             Counter c = count_pairs(seq, cache);
             for (const auto &item_tf : c) {
-                priority_queue.push_back(item_tf.first);
+                priority_queue.emplace_back(item_tf.first);
                 freqs[item_tf.first] = item_tf.second;
             }
             sort(priority_queue.begin(), priority_queue.end(), [&](const auto &a, const auto &b) {

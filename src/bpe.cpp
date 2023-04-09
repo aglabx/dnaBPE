@@ -112,7 +112,7 @@ int main(int argc, char* argv[]) {
             break;
         }
 
-        merged.push_back(rep);
+        merged.emplace_back(rep);
         tokens[L] = rep;
         rev_tokens[rep] = L;
 
@@ -130,7 +130,7 @@ int main(int argc, char* argv[]) {
         L += 1;
 
         if (snapshot_points.find(L) != snapshot_points.end()) {
-            save_snapshot(tokens, merged, rev_tokens, seq, alphabet_map, alphabet_tf_map, output_prefix, std::to_string(L), false);
+            save_snapshot(tokens, merged, kmer2kmer_id, rev_tokens, seq, alphabet_map, alphabet_tf_map, output_prefix, std::to_string(L), false);
         }
 
         if (max_tokens && L > max_tokens) {
@@ -138,7 +138,7 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    save_snapshot(tokens, merged, rev_tokens, seq, alphabet_map, alphabet_tf_map, output_prefix, n_tokens_suffix, true);
+    save_snapshot(tokens, merged, kmer2kmer_id, rev_tokens, seq, alphabet_map, alphabet_tf_map, output_prefix, std::to_string(L), true);
 
     return 0;
 }
