@@ -91,7 +91,7 @@ int main(int argc, char* argv[]) {
     // precompute
 
     std::cout << "Filling to SequenceContainer" << std::endl;
-    SequenceContainer container(seq);
+    SequenceContainer container(seq, n_threads);
     seq.clear(); seq.resize(0);
 
 

@@ -10,26 +10,20 @@
 #include <unordered_set>
 #include <chrono>
 #include <queue>
-
+#include <thread>
+#include <mutex>
+std::mutex cout_mutex;
 
 typedef std::unordered_map<Kmer, size_t> Counter;
-
 
 class Node {
 public:
     size_t index;
-    Kmer pair;
+    Kmer pair; // std::tuple<uint16_t, uint16_t>
     bool help_token;
     Node* prev;
     Node* next;
-    
-
-    void update(Kmer pair, bool help_token) {
-        this->pair = pair;
-        this->help_token = help_token;
-    }
 };
-
 
 class SequenceContainer {
 public:
@@ -65,7 +59,7 @@ public:
         Node* current_node;
     };
 
-    SequenceContainer() : head(nullptr), tail(nullptr) {}
+    SequenceContainer() : head(nullptr), tail(nullptr), size_(0) {}
 
     SequenceContainer(const std::vector<TokenType>& seq) : head(nullptr), tail(nullptr), size_(0) {
         for (size_t i = 0; i < seq.size() - 1; i++) {
@@ -84,6 +78,56 @@ public:
             append(i, pair, help_token);
         }
 
+        for (const auto& [kmer, count] : counter) {
+            max_heap.push(std::make_pair(count, kmer));
+        }
+    }
+
+    static void process_chunk(size_t thread_id, const std::vector<TokenType>& seq, size_t start, size_t end, SequenceContainer& container) {
+
+        size_t total = end - 1 - start;
+
+        for (size_t i = start; i < end - 1; i++) {
+            TokenType a = seq.at(i);
+            TokenType b = seq.at(i + 1);
+            Kmer pair = std::make_tuple(a, b);
+            bool help_token = false;
+            if (a <= N_HELP_TOKENS || b <= N_HELP_TOKENS) {
+                help_token = true;
+            }
+            container.append(i, pair, help_token);
+            if (i && i % 1000000 == 0) {
+                std::lock_guard<std::mutex> lock(cout_mutex);
+                std::cout << "Thread " << thread_id << ": Processed " << 100. * (i-start) / (end - 1 - start) << " tokens from " << (end - 1 - start) << std::endl;
+            }
+        }
+    }
+
+    SequenceContainer(const std::vector<TokenType>& seq, size_t num_threads) : head(nullptr), tail(nullptr), size_(0) {
+
+        size_t chunk_size = seq.size() / num_threads;
+        std::vector<std::thread> threads;
+        std::vector<SequenceContainer> containers(num_threads, SequenceContainer());
+        
+        for (size_t i = 0; i < num_threads; i++) {
+            size_t start = i * chunk_size;
+            size_t end = (i == num_threads - 1) ? seq.size() : start + chunk_size;
+            std::cout << "Adding thread " << i << ": Processing chunk from " << start << " to " << end << " " << seq.size() << std::endl;
+            threads.emplace_back([&, i, start, end, seq = std::cref(seq), container = std::ref(containers[i])] {
+                    process_chunk(i, seq, start, end, container);
+            });
+        }
+
+        for (auto& t : threads) {
+            t.join();
+        }
+
+        std::cout << "All threads compelted." << std::endl;
+        for (size_t i = 0; i < num_threads; i++) {
+            merge(std::move(containers[i]));
+        }
+
+        std::cout << "Updating max heap..." << std::endl;
         for (const auto& [kmer, count] : counter) {
             max_heap.push(std::make_pair(count, kmer));
         }
@@ -112,11 +156,46 @@ public:
         size_++;
     }
 
+    void merge(SequenceContainer&& other) {
+
+        std::cout << "Merging containers..." << std::endl;
+
+        if (!other.head) {
+            return;
+        }
+
+        if (!head) {
+            head = other.head;
+            tail = other.tail;
+        } else {
+            tail->next = other.head;
+            other.head->prev = tail;
+            tail = other.tail;
+        }
+
+        size_ += other.size_;
+
+        for (const auto& [kmer, count] : other.counter) {
+            counter[kmer] += count;
+        }
+
+        for (const auto& [kmer, set] : other.positions) {
+            positions[kmer].insert(set.begin(), set.end());
+        }
+
+        for (const auto& [index, node] : other.indexMap) {
+            indexMap[index] = node;
+        }
+
+        other.head = nullptr;
+        other.tail = nullptr;
+    }
+
     ~SequenceContainer() {
         while (head) {
             Node* temp = head;
             head = head->next;
-            delete temp;
+            if (temp != nullptr) delete temp;
         }
     }
 
@@ -170,43 +249,13 @@ public:
 
 
     void collapse(Kmer rep, size_t index, TokenType L) {
-        
-        //  A   T   A   C   T
-        // A|T T|A A|C C|T T|G
-        // AC 
-        // A|T T|AC -- AC|T T|G
-        //  A   T       AC   T
-
-        // A|~ ~|A A|C C|T T|G
-
-
-        // A|T T|A A|C C|~ ~|G
-
-        //  T    A    C   A   C   T
-        // T|A  A|C  C|A A|C C|T T|... 
-        //  T    AC   A   C   T
-        // T|AC AC|A A|C A|T T|...
-
-        // 5
-        // // T|T T|T T|T T|T T|T T|C
-        // T|T - 3 = 2
-        // // T|TT TT|T T|T T|T T|C
-        // T|TT 1
-        // TT|T 1
-        // T|T 2
-        // // T|TT TT|TT  TT|T T|C
-        // T|TT 1 
-        // TT|T 1 - 1 + 1
-        // T|T 2 -1 -1
-        // TT|TT + 1
+    
 
         std::unordered_set<Kmer> touched_kmers;
 
         Node* currentNode = indexMap[index];
 
         if (currentNode->pair != rep) {
-            // std::cout << "Error: collapse called on wrong node" << std::endl;
-            // print counter value
             return;
         }
 
@@ -218,9 +267,7 @@ public:
             Kmer left_kmer = std::make_tuple(std::get<0>(prevNode->pair), L);
                  
             if (!prevNode->help_token) {
-                
-                // std::cout << "Decreasing counter for prev_kmer " << std::get<0>(prev_kmer) << " " << std::get<1>(prev_kmer) << std::endl;
-
+            
                 counter[prev_kmer]--;
                 if (counter[prev_kmer] == 0) {
                     counter.erase(prev_kmer);
@@ -247,9 +294,6 @@ public:
 
             if (!nextNode->help_token) {
 
-                // std::cout << "Decreasing counter for next_kmer " << std::get<0>(next_kmer) << " " << std::get<1>(next_kmer) << std::endl;
-
-
                 counter[next_kmer]--;
                 if (counter[next_kmer] == 0) {
                     counter.erase(next_kmer);
@@ -267,13 +311,10 @@ public:
 
         }
 
-        // Remove the current node
-        // std::cout << "Removing node at index: " << index << std::endl;
         removeAtIndex(index);
 
         touched_kmers.insert(rep);
-        // std::cout << "Counter size for rep is " << counter[rep] << std::endl;
-
+        
         for (const auto& kmer : touched_kmers) {
             if (counter[kmer] > 0) {
                 max_heap.push(std::make_pair(counter[kmer], kmer));
@@ -343,13 +384,13 @@ public:
     
 
 private:
-    Node* head;
-    Node* tail;
+    Node* head = nullptr;
+    Node* tail = nullptr;
     
-    Counter  counter;
+    Counter counter;
     std::unordered_map<Kmer, std::unordered_set<size_t>> positions;
 
-    size_t size_;
+    size_t size_ = 0;
     std::unordered_map<size_t, Node*> indexMap;
     std::priority_queue<std::pair<size_t, Kmer>> max_heap;
 
