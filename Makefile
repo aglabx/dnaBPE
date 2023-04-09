@@ -1,19 +1,34 @@
 CXX=g++
-CXXFLAGS=-std=c++2a -pthread -static -Wl,--whole-archive -lpthread -Wl,--no-whole-archive  -O3 -rdynamic
+CXXFLAGS=-std=c++2a -pthread -static -Wl,--whole-archive -lpthread -Wl,--no-whole-archive -O3 -rdynamic
+LDFLAGS=
 LDLIBS=
 
-TARGET=bin/bpe.v3.exe
+
+# CXX=g++
+# CXXFLAGS=-std=c++2a -pthread -static -Wl,--whole-archive -lpthread -Wl,--no-whole-archive -rdynamic -pg 
+# LDFLAGS=-pg
+# LDLIBS=
+
+# CXX=g++
+# CXXFLAGS=-std=c++2a -pthread -Wall -g
+# LDFLAGS=
+# LDLIBS=
+
+
+TARGET=bin/bpe.v4.exe
 SRCS=nlohmann/json.hpp src/tokens.hpp src/tokens_model.hpp src/readers.hpp src/preprocess.hpp src/core.hpp src/output.hpp src/container.hpp src/bpe.v3.cpp
 
 all: $(TARGET)
 
 $(TARGET): $(SRCS)
-	$(CXX) $(CXXFLAGS) $(SRCS) $(LDLIBS) -o $(TARGET)
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(SRCS) $(LDLIBS) -o $(TARGET)
 
 .PHONY: clean
 
 clean:
 	rm -f $(TARGET)
 
+
 # sudo apt install libtbb-dev
 # g++ -std=c++2a -pthread -static -Wl,--whole-archive -lpthread -Wl,--no-whole-archive -O3 -rdynamic json.hpp bpe.cpp -o bpe.exe 
+# gcc -std=c++2a -pthread -g nlohmann/json.hpp src/tokens.hpp src/tokens_model.hpp src/readers.hpp src/preprocess.hpp src/core.hpp src/output.hpp src/container.hpp src/bpe.v3.cpp -o bin/bpe.vg.exe
