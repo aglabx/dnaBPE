@@ -49,6 +49,16 @@ struct tuple_compare {
 };
 
 
+struct TupleHash {
+    template <class T1, class T2>
+    std::size_t operator()(const std::tuple<T1, T2>& tuple) const {
+        const std::size_t h1 = std::hash<T1>{}(std::get<0>(tuple));
+        const std::size_t h2 = std::hash<T2>{}(std::get<1>(tuple));
+        return h1 ^ (h2 << 1);
+    }
+};
+
+
 struct pair_hash {
     template <class T1, class T2>
     std::size_t operator() (const std::pair<T1, T2> &pair) const {

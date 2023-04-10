@@ -62,7 +62,10 @@ public:
     SequenceContainer() : head(nullptr), tail(nullptr), size_(0) {}
 
     SequenceContainer(const std::vector<TokenType>& seq, std::unordered_map<Kmer, size_t, TupleHash>& kmer2kmer_id, std::unordered_map<size_t, Kmer>& kmer_id2kmer) : head(nullptr), tail(nullptr), size_(0) {
+        init_in_single_thread(seq, kmer2kmer_id, kmer_id2kmer); 
+    }
 
+    void init_in_single_thread(const std::vector<TokenType>& seq, std::unordered_map<Kmer, size_t, TupleHash>& kmer2kmer_id, std::unordered_map<size_t, Kmer>& kmer_id2kmer) {
         for (size_t i = 0; i < seq.size() - 1; i++) {
 
             if (i && i % 1000000 == 0) {
@@ -101,14 +104,15 @@ public:
             if (a <= N_HELP_TOKENS || b <= N_HELP_TOKENS) {
                 help_token = true;
             }
-
-            if (kmer2kmer_id.find(pair) == kmer2kmer_id.end()) {
+            size_t kmer_id;
+            {
                 std::lock_guard<std::mutex> lock(hash_mutex);
-                kmer2kmer_id[pair] = kmer2kmer_id.size();
-                kmer_id2kmer[kmer_id2kmer.size()] = pair;
+                if (kmer2kmer_id.find(pair) == kmer2kmer_id.end()) {
+                    kmer2kmer_id[pair] = kmer2kmer_id.size();
+                    kmer_id2kmer[kmer_id2kmer.size()] = pair;
+                }
+                kmer_id = kmer2kmer_id.at(pair);
             }
-            size_t kmer_id = kmer2kmer_id.at(pair);
-
             container.append_simple(i, kmer_id, help_token);
             if (i && i % 1000000 == 0) {
                 std::lock_guard<std::mutex> lock(cout_mutex);
@@ -118,6 +122,11 @@ public:
     }
 
     SequenceContainer(const std::vector<TokenType>& seq, std::unordered_map<Kmer, size_t, TupleHash>& kmer2kmer_id, std::unordered_map<size_t, Kmer>& kmer_id2kmer, size_t num_threads) : head(nullptr), tail(nullptr), size_(0) {
+
+        if (num_threads == 1) {
+            init_in_single_thread(seq, kmer2kmer_id, kmer_id2kmer);
+            return;
+        }
 
         size_t chunk_size = seq.size() / num_threads;
         std::vector<std::thread> threads;
@@ -147,7 +156,16 @@ public:
             positions[kmer_id].clear();
         }
         counter.clear();
+        // reserve counter and positions
+        counter.reserve(kmer2kmer_id.size());
+        positions.reserve(kmer2kmer_id.size());
+
         for (auto it = begin(); it != end(); ++it) {
+            // add progress bar here
+            if (it->index % 1000000 == 0) {
+                std::cout << "Processed " << 100 * it->index / size() << "%% tokens from " << size() << std::endl;
+            }
+
             if (!it->help_token) {
                 counter[it->kmer_id]++;
                 positions[it->kmer_id].insert(it->index);
@@ -225,11 +243,11 @@ public:
 
         for (const auto& [index, node] : other.indexMap) {
             indexMap[index] = node;
-    }
+        }
 
-    other.head = nullptr;
-    other.tail = nullptr;
-}
+        other.head = nullptr;
+        other.tail = nullptr;
+    }
 
     ~SequenceContainer() {
         while (head) {
@@ -291,6 +309,11 @@ public:
     
 
         std::unordered_set<size_t> touched_kmers;
+
+        // check indexMap has index
+        if (indexMap.find(index) == indexMap.end()) {
+            return;
+        }
 
         Node* currentNode = indexMap[index];
 
@@ -367,6 +390,7 @@ public:
         }
         
     }
+    
 
     std::pair<size_t, size_t> get_most_frequent_pair() {
         if (counter.empty()) {
@@ -394,8 +418,14 @@ public:
     void process_repeat(size_t kmer_id, TokenType L, std::unordered_map<Kmer, size_t, TupleHash>& kmer2kmer_id, std::unordered_map<size_t, Kmer>& kmer_id2kmer) {
 
         // std::cout << "Collapsing..." << std::endl;
+        size_t i = 0;
         for (size_t index: get_positions(kmer_id)) {
+            // print progress here
+            if (i && i % 1000000 == 0) {
+                std::cout << "Processed " << i << " positions." << std::endl;
+            }
             collapse(kmer_id, index, L, kmer2kmer_id, kmer_id2kmer);
+            ++i;
         }
         // std::cout << "Done." << std::endl;
     }
@@ -447,6 +477,7 @@ public:
     
 
 private:
+
     Node* head = nullptr;
     Node* tail = nullptr;
 

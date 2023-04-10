@@ -5,8 +5,8 @@ LDLIBS=
 
 
 # CXX=g++
-# CXXFLAGS=-std=c++2a -pthread -static -Wl,--whole-archive -lpthread -Wl,--no-whole-archive -rdynamic -pg 
-# LDFLAGS=-pg
+# CXXFLAGS=-std=c++17 -pthread -Wall -O1 
+# LDFLAGS=-g 
 # LDLIBS=
 
 # CXX=g++
@@ -15,13 +15,13 @@ LDLIBS=
 # LDLIBS=
 
 
-TARGET=bin/bpe.v4.exe
+TARGET=bin/bpe.v5.exe
 SRCS=nlohmann/json.hpp src/tokens.hpp src/tokens_model.hpp src/readers.hpp src/preprocess.hpp src/core.hpp src/output.hpp src/container.hpp src/bpe.v3.cpp
 
 all: $(TARGET)
 
 $(TARGET): $(SRCS)
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(SRCS) $(LDLIBS) -o $(TARGET)
+	$(CXX) $(CXXFLAGS) $(SRCS) $(LDLIBS) -o $(TARGET) $(LDFLAGS) 
 
 .PHONY: clean
 

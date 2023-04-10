@@ -1,3 +1,14 @@
 .vscode
 text.md
 data/
+test.1
+.gitignore
+analysis.txt
+analysis2.txt
+analysis3.txt
+callgrind.out.56777
+callgrind.out.78933
+gmon.out
+src/benchmark.txt
+output.png
+output2.png

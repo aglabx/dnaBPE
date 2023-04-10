@@ -41,18 +41,18 @@ void save_snapshot(
     }
 
     size_t pos = 0;
-        size_t seqid = 0;
-        for (const auto& element : seq) {
-            if (element == 5) {
-                seqid += 1;
-                pos = 0;
-            } else {
-                std::string token_string = alphabet_map.at(element);
-                kmer2poses.at(token_string).emplace_back(std::make_pair(seqid, pos));
-                kmer2tf.at(token_string) += 1;
-                pos += token_string.size();
-            }
+    size_t seqid = 0;
+    for (const TokenType& element : seq) {
+        if (element == 5) {
+            seqid += 1;
+            pos = 0;
+        } else {
+            std::string token_string = alphabet_map.at(element);
+            kmer2poses.at(token_string).emplace_back(std::make_pair(seqid, pos));
+            kmer2tf.at(token_string) += 1;
+            pos += token_string.size();
         }
+    }
     
     if (save_seq) {
         std::ofstream out_file(output_bpe_encoding_file);
@@ -77,7 +77,7 @@ void save_snapshot(
         size_t kmer_id = kmer2kmer_id.at(kmer_);
         TokenType token = rev_tokens[kmer_id];
         std::string kmer_seq = alphabet_map.at(token);
-        if (kmer2tf.at(kmer_seq) == 0) {
+        if (save_seq && kmer2tf.at(kmer_seq) == 0) {
             continue;
         }
         poses_file << kmer_seq << "\t" << alphabet_tf_map.at(token) << "\t" << kmer2tf.at(kmer_seq) << "\t";

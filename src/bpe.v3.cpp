@@ -129,7 +129,7 @@ int main(int argc, char* argv[]) {
         
         //// Fill resulting structures
         Kmer rep_kmer = kmer_id2kmer.at(rep);
-        merged.emplace_back(rep_kmer);
+        merged.push_back(rep_kmer);
         tokens[L] = rep;
         rev_tokens[rep] = L;
         TokenType a = std::get<0>(rep_kmer);
@@ -170,7 +170,7 @@ int main(int argc, char* argv[]) {
 
     std::vector<TokenType> raw_seq = container.get_as_vector(kmer_id2kmer);
     
-    save_snapshot(tokens, merged, kmer2kmer_id, rev_tokens, seq, alphabet_map, alphabet_tf_map, output_prefix, std::to_string(L), true);
+    save_snapshot(tokens, merged, kmer2kmer_id, rev_tokens, raw_seq, alphabet_map, alphabet_tf_map, output_prefix, std::to_string(L), true);
     
 
     return 0;
