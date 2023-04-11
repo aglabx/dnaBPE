@@ -12,3 +12,6 @@ gmon.out
 src/benchmark.txt
 output.png
 output2.png
+*.bpe
+*.poses
+*.json
