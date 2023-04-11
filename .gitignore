@@ -15,3 +15,4 @@ output2.png
 *.bpe
 *.poses
 *.json
+src/bpe.v3.dSYM/Contents/Info.plist
