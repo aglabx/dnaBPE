@@ -438,8 +438,8 @@ private:
     PositionsContainer** positions;
     char* flags;
     std::atomic<u_int64_t> size_ = 0;
-    // size_t max_size = 402653184; // 3Gb of space
-    size_t max_size = 20; // 3Gb of space
+    size_t max_size = 402653184; // 3Gb of space
+    // size_t max_size = 20; // 3Gb of space
 };
 
 #endif
