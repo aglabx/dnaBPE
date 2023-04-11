@@ -96,7 +96,7 @@ int main(int argc, char* argv[]) {
     // precompute
     auto start_time = std::chrono::high_resolution_clock::now();
     std::cout << "Filling to SequenceContainer" << std::endl;    
-    SequenceContainer container(seq, kmer2kmer_id, kmer_id2kmer);
+    SequenceContainer container(seq, kmer2kmer_id, kmer_id2kmer, n_threads);
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
     std::cout << "Filling to SequenceContainer took " << duration << " ms" << std::endl;
@@ -110,9 +110,9 @@ int main(int argc, char* argv[]) {
     
     while (true) {
 
-        std::cout << "Priority queue: ";
-        container.print_queue(alphabet_map, kmer_id2kmer);
-        container.display(alphabet_map, kmer_id2kmer);
+        // std::cout << "Priority queue: ";
+        // container.print_queue(alphabet_map, kmer_id2kmer);
+        // container.display(alphabet_map, kmer_id2kmer);
 
 
         std::tie(rep, tf) = container.get_most_frequent_pair();
@@ -175,6 +175,11 @@ int main(int argc, char* argv[]) {
     
     save_snapshot(tokens, merged, kmer2kmer_id, rev_tokens, raw_seq, alphabet_map, alphabet_tf_map, output_prefix, std::to_string(L), true);
     
+    // container.diagnostic_print_of_state();
 
+    std::string output_bpe_encoding_file = output_prefix + "." + n_tokens_suffix + ".bpe";
+    container.save_bpe_to_file(output_bpe_encoding_file, alphabet_map, kmer_id2kmer);
+
+    std::cout << "Saving DONE" << std::endl;
     return 0;
 }

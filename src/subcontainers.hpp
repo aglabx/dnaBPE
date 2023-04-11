@@ -12,8 +12,11 @@
 #include <thread>
 #include <mutex>
 #include <cstring>
+#include <atomic>
 
 
+// typedef CounterType to uint32_t
+typedef uint32_t CounterType;
 
 class PositionsContainer {
 public:
@@ -25,6 +28,7 @@ public:
     }
 
     PositionsContainer(size_t size) {
+        
         positions = new size_t[size];
         for (size_t i = 0; i < size; i++) {
             positions[i] = 0;
@@ -35,7 +39,8 @@ public:
 
     // the copy constructor
     PositionsContainer(const PositionsContainer& other)
-    : size_(other.size_), max_size_(other.max_size_) {
+    : max_size_(other.max_size_) {
+        size_.store(other.size_.load());
         positions = new size_t[max_size_];
         for (size_t i = 0; i < max_size_; i++) {
             positions[i] = other.positions[i];
@@ -51,7 +56,7 @@ public:
         }
 
         // Copy the size and max_size values
-        size_ = other.size_;
+        size_.store(other.size_.load());
         max_size_ = other.max_size_;
 
         // Allocate new memory for positions and copy the elements from the other object
@@ -65,7 +70,8 @@ public:
 
     // Move constructor
     PositionsContainer(PositionsContainer&& other) noexcept
-        : positions(other.positions), size_(other.size_), max_size_(other.max_size_) {
+        : positions(other.positions), max_size_(other.max_size_) {
+        size_.store(other.size_.load());
         // Nullify the pointers in the other object to avoid double deletion
         other.positions = nullptr;
         other.size_ = 0;
@@ -78,7 +84,7 @@ public:
             if (positions != nullptr) delete[] positions;
 
             positions = other.positions;
-            size_ = other.size_;
+            size_.store(other.size_.load());
             max_size_ = other.max_size_;
 
             other.positions = nullptr;
@@ -96,11 +102,10 @@ public:
     }
 
     void set(size_t index) {
-        if (size_ >= max_size_) {
+        if (size_.load() >= max_size_) {
             extend_counts();
         }
-        positions[size_] = index + 1;
-        size_++;
+        positions[size_.fetch_add(1)] = index + 1;
     }
 
     size_t get(size_t index) {
@@ -119,13 +124,14 @@ public:
         return positions[index];
     }
 
-
     void clear() {
-        if (positions != nullptr) delete[] positions;
+        if (positions != nullptr) {
+            delete[] positions;
+            positions = nullptr;
+        }
     }
-
-    size_t size() {
-        return size_;
+    u_int64_t size() const {
+        return size_.load();
     }
 
     void extend_counts() {
@@ -141,9 +147,25 @@ public:
         max_size_ *= 2;
     }
 
+    void diagnostic_print_of_state() {
+        // print all variables
+        std::cout << "POSITIONS" << std::endl;
+        std::cout << "size_: " << size_ << std::endl;
+        std::cout << "max_size_: " << max_size_ << std::endl;
+        std::cout << "positions: " << std::endl;
+        if (positions == nullptr) {
+            std::cout << "nullptr" << std::endl;
+            return;
+        }
+        for (size_t i = 0; i < size_; i++) {
+            std::cout << positions[i] << " ";
+        }
+        std::cout << std::endl;
+    }
+
 private:
     size_t* positions = nullptr;
-    size_t size_ = 0;
+    std::atomic<u_int64_t> size_ = 0;
     size_t max_size_ = 1000;
 };
 
@@ -162,12 +184,14 @@ public:
 
     // Copy constructor
     CounterContainer(const CounterContainer& other) {
-        size_ = other.size_;
+        size_.store(other.size_.load());
         max_size = other.max_size;
 
-        counts = new size_t[max_size];
-        memcpy(counts, other.counts, max_size * sizeof(size_t));
-
+        counts = new std::atomic<CounterType>[max_size];
+        for (size_t i = 0; i < max_size; i++) {
+            counts[i].store(other.counts[i].load());
+        }
+        
         flags = new char[max_size];
         memcpy(flags, other.flags, max_size * sizeof(char));
 
@@ -184,12 +208,14 @@ public:
     // Copy assignment operator
     CounterContainer& operator=(const CounterContainer& other) {
         if (this != &other) {
-            size_ = other.size_;
+            size_.store(other.size_.load());
             max_size = other.max_size;
 
             delete[] counts;
-            counts = new size_t[max_size];
-            memcpy(counts, other.counts, max_size * sizeof(size_t));
+            counts = new std::atomic<CounterType>[max_size];
+            for (size_t i = 0; i < max_size; i++) {
+                counts[i].store(other.counts[i].load());
+            }
 
             delete[] flags;
             flags = new char[max_size];
@@ -214,8 +240,8 @@ public:
     }
 
     CounterContainer(size_t starting_size) {
-        counts = new size_t[max_size];
-        for (size_t i = 0; i < max_size; i++) {
+        counts = new std::atomic<CounterType>[max_size];
+        for (CounterType i = 0; i < max_size; i++) {
             counts[i] = 0;
         }
         flags = new char[max_size];
@@ -234,7 +260,9 @@ public:
         if (flags != nullptr) delete[] flags;
         if (positions != nullptr) {
             for (size_t i = 0; i < max_size; ++i) {
-                delete positions[i];
+                if (positions[i] != nullptr) {
+                    delete positions[i];
+                }
             }
             delete[] positions;
         }
@@ -271,7 +299,7 @@ public:
         }
         
         if (kmer_id < size_) {
-            --counts[kmer_id];    
+            counts[kmer_id]--;    
             return;
         }
         std::cout << "overflow counter kmer_id > size_: " << kmer_id << " " << size_ << std::endl;
@@ -283,7 +311,7 @@ public:
             exit(1);
         }
         if (kmer_id < size_) {
-            ++counts[kmer_id];
+            counts[kmer_id]++;
             return;
         }
         std::cout << "overflow counter kmer_id > size_: " << kmer_id << " " << size_ << std::endl;
@@ -297,7 +325,7 @@ public:
         if (kmer_id < size_) {
             return flags[kmer_id];
         }
-        std::cout << "overflow counter kmer_id > size_: " << kmer_id << " " << size_ << std::endl;
+        std::cout << "overflow helper counter kmer_id > size_: " << kmer_id << " " << size_ << std::endl;
         return false;
     }
 
@@ -315,12 +343,12 @@ public:
         std::cout << "overflow counter kmer_id > size_: " << kmer_id << " " << size_ << std::endl;
     }
 
-    size_t get(size_t kmer_id) {
+    CounterType get(size_t kmer_id) {
         if (kmer_id >= max_size) {
             std::cout << "kmer_id >= max_size" << std::endl;
             exit(1);
         }
-        return counts[kmer_id];
+        return counts[kmer_id].load();
     }
 
     void add_position(size_t kmer_id, size_t position) {
@@ -339,7 +367,7 @@ public:
         return *positions[kmer_id];
     }
 
-    size_t size() {
+    size_t size() const {
         return size_;
     }
 
@@ -353,18 +381,24 @@ public:
 
     void extend_counts() {
         std::cout << "extend_counts to " << max_size * 2 << std::endl;
-        size_t* new_counts = new size_t[max_size * 2];
+        std::atomic<CounterType>* new_counts = new std::atomic<CounterType>[max_size * 2];
         char* new_flags = new char[max_size * 2];
         PositionsContainer** new_positions = new PositionsContainer*[max_size * 2];
         for (size_t i = 0; i < max_size; i++) {
-            new_counts[i] = counts[i];
             new_flags[i] = flags[i];
             new_positions[i] = positions[i];
         }
+        for (CounterType i = 0; i < max_size; i++) {
+            new_counts[i].store(counts[i].load());
+        }
+
         for (size_t i = max_size; i < max_size * 2; i++) {
             new_counts[i] = 0;
             new_flags[i] = 0;
             new_positions[i] = nullptr;
+        }
+        for (CounterType i = max_size; i < max_size * 2; i++) {
+            new_counts[i] = 0;
         }
         delete[] counts;
         delete[] flags;
@@ -375,12 +409,37 @@ public:
         max_size *= 2;
     }
 
+    void diagnostic_print_of_state() {
+        // print all variables
+        std::cout << "COINTER" << std::endl;
+        std::cout << "size_ " << size_ << std::endl;
+        std::cout << "max_size " << max_size << std::endl;
+        std::cout << "counts" << std::endl;
+        for (size_t i = 0; i < size_; i++) {
+            std::cout << i << " " << counts[i] << std::endl;
+        }
+        std::cout << "flags" << std::endl;
+        for (size_t i = 0; i < size_; i++) {
+            std::cout << i << " " << (int)flags[i] << std::endl;
+        }
+        std::cout << "positions" << std::endl;
+        for (size_t i = 0; i < size_; i++) {
+            std::cout << i << std::endl;
+            if (positions[i] != nullptr) {
+                positions[i]->diagnostic_print_of_state();
+            } else {
+                std::cout << " nullptr" << std::endl;
+            }
+        }
+    }
+
 private:
-    size_t* counts;
+    std::atomic<CounterType> * counts;
     PositionsContainer** positions;
     char* flags;
-    size_t size_ = 0;
-    size_t max_size = 402653184; // 3Gb of space
+    std::atomic<u_int64_t> size_ = 0;
+    // size_t max_size = 402653184; // 3Gb of space
+    size_t max_size = 20; // 3Gb of space
 };
 
 #endif
