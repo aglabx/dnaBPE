@@ -30,7 +30,7 @@ $(TARGET_DEV): $(SRCS)
 
 $(TARGET_SLOW): $(SRCS_SLOW)
 	git checkout e351f3f
-	$(CXX) $(CXXFLAGS_DEV) $(SRCS) $(LDLIBS) -o $(TARGET_SLOW)
+	$(CXX) $(CXXFLAGS_DEV) $(SRCS_SLOW) $(LDLIBS) -o $(TARGET_SLOW)
 	git checkout master
 
 .PHONY: all prod dev clean slow
