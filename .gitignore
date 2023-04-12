@@ -12,3 +12,9 @@ gmon.out
 src/benchmark.txt
 output.png
 output2.png
+*.bpe
+*.poses
+*.json
+src/bpe.v3.dSYM/Contents/Info.plist
+src/bpe.v3
+src/bpe.v3.dSYM/Contents/Resources/DWARF/bpe.v3

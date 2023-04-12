@@ -71,6 +71,9 @@ int main(int argc, char* argv[]) {
     std::vector<Kmer> merged;
     std::unordered_map<Kmer, size_t, TupleHash> kmer2kmer_id;
     std::unordered_map<size_t, Kmer> kmer_id2kmer;
+    // set zero for start to mark collapsed nodes
+    kmer2kmer_id[std::make_tuple(0, 0)] = 0;
+    kmer_id2kmer[0] = std::make_tuple(0, 0);
 
 
     TokenType L = alphabet.size();
@@ -92,7 +95,7 @@ int main(int argc, char* argv[]) {
 
     // precompute
     auto start_time = std::chrono::high_resolution_clock::now();
-    std::cout << "Filling to SequenceContainer" << std::endl;
+    std::cout << "Filling to SequenceContainer" << std::endl;    
     SequenceContainer container(seq, kmer2kmer_id, kmer_id2kmer, n_threads);
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
@@ -107,11 +110,10 @@ int main(int argc, char* argv[]) {
     
     while (true) {
 
-        // print priority_queue and freqs
         // std::cout << "Priority queue: ";
-        // for (const auto &item_tf : priority_queue) {
-        //     std::cout << alphabet_map.at(std::get<0>(item_tf)) << " " << alphabet_map.at(std::get<1>(item_tf)) << " " << freqs[item_tf] << std::endl;
-        // }
+        // container.print_queue(alphabet_map, kmer_id2kmer);
+        // container.display(alphabet_map, kmer_id2kmer);
+
 
         std::tie(rep, tf) = container.get_most_frequent_pair();
 
@@ -145,12 +147,13 @@ int main(int argc, char* argv[]) {
             auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
 
             std::cout << "Tokens " << L << " " << alphabet_map.at(std::get<0>(rep_kmer)) << " " << alphabet_map.at(std::get<1>(rep_kmer)) << " " << token_str << " " << tf << " : "<< "size: " << container.size() << " execution time: " << duration << " milliseconds" << std::endl;
-        pos++;
+            pos++;
             start_time = std::chrono::high_resolution_clock::now();
         } 
 
-        container.process_repeat(rep, L, kmer2kmer_id, kmer_id2kmer);
+        container.collapse(rep, L, kmer2kmer_id, kmer_id2kmer, alphabet_map);
 
+        
 
         L += 1;
 
@@ -172,6 +175,11 @@ int main(int argc, char* argv[]) {
     
     save_snapshot(tokens, merged, kmer2kmer_id, rev_tokens, raw_seq, alphabet_map, alphabet_tf_map, output_prefix, std::to_string(L), true);
     
+    // container.diagnostic_print_of_state();
 
+    std::string output_bpe_encoding_file = output_prefix + "." + n_tokens_suffix + ".bpe";
+    container.save_bpe_to_file(output_bpe_encoding_file, alphabet_map, kmer_id2kmer);
+
+    std::cout << "Saving DONE" << std::endl;
     return 0;
 }

@@ -27,7 +27,6 @@ void save_snapshot(
         bool save_seq=false
         ) {
 
-    std::string output_bpe_encoding_file = output_prefix + "." + n_tokens_suffix + ".bpe";
     std::string output_poses_file = output_prefix + "." + n_tokens_suffix + ".poses";
     std::string output_model_file = output_prefix + "." + n_tokens_suffix + ".json";
 
@@ -53,23 +52,6 @@ void save_snapshot(
             pos += token_string.size();
         }
     }
-    
-    if (save_seq) {
-        std::ofstream out_file(output_bpe_encoding_file);
-        if (out_file.is_open()) {
-            for (const auto& element : seq) {
-                if (element == 5) {
-                    out_file << "\n";
-                } else {
-                    std::string token_string = alphabet_map.at(element);
-                    out_file << token_string << " ";
-                    pos += token_string.size();
-                }
-            }
-            out_file << std::endl;
-            out_file.close();
-        }
-    } 
 
     std::ofstream poses_file(output_poses_file);
     // write poses to file and add the secone argument tf from kmer2tf
@@ -93,8 +75,6 @@ void save_snapshot(
     std::ofstream configFile(output_model_file);
     configFile << std::setw(2) << json_data << std::endl;
     configFile.close();
-
-    std::cout << "Config saved to config.json" << std::endl;
 }
 
 #endif

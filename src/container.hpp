@@ -1,9 +1,10 @@
 #ifndef CONTAINER_FILE_H
 #define CONTAINER_FILE_H
 
-
+#include <stdexcept>
 #include <tuple>
 #include <vector>
+#include <string>
 #include "tokens.hpp"
 #include <unordered_map>
 #include <iostream>
@@ -12,132 +13,111 @@
 #include <queue>
 #include <thread>
 #include <mutex>
+#include <fstream>
+#include "subcontainers.hpp"
+
 std::mutex cout_mutex;
 std::mutex hash_mutex;
 
-
-class Node {
-public:
-    size_t index;
-    size_t kmer_id; // kmer_id to std::tuple<uint16_t, uint16_t>
-    bool help_token;
-    Node* prev;
-    Node* next;
-};
+std::mutex maps_mutex;
+std::string input;
 
 class SequenceContainer {
 public:
 
-    class iterator {
-    public:
-        using iterator_category = std::forward_iterator_tag;
-        using difference_type = std::ptrdiff_t;
-        using value_type = Node;
-        using pointer = Node*;
-        using reference = Node&;
-
-        iterator(Node* node) : current_node(node) {}
-
-        reference operator*() const { return *current_node; }
-        pointer operator->() const { return current_node; }
-
-        iterator& operator++() {
-            current_node = current_node->next;
-            return *this;
-        }
-
-        iterator operator++(int) {
-            iterator temp = *this;
-            ++(*this);
-            return temp;
-        }
-
-        bool operator==(const iterator& other) const { return current_node == other.current_node; }
-        bool operator!=(const iterator& other) const { return !(*this == other); }
-
-    private:
-        Node* current_node;
-    };
-
-    SequenceContainer() : head(nullptr), tail(nullptr), size_(0) {}
-
-    SequenceContainer(const std::vector<TokenType>& seq, std::unordered_map<Kmer, size_t, TupleHash>& kmer2kmer_id, std::unordered_map<size_t, Kmer>& kmer_id2kmer) : head(nullptr), tail(nullptr), size_(0) {
-        init_in_single_thread(seq, kmer2kmer_id, kmer_id2kmer); 
+    SequenceContainer() {
+        array_of_tokens = nullptr;
+        array_of_prevs = nullptr;
+        array_of_nexts = nullptr;
+        container_size_ = 0;
+        size_ = 0;
     }
 
-    void init_in_single_thread(const std::vector<TokenType>& seq, std::unordered_map<Kmer, size_t, TupleHash>& kmer2kmer_id, std::unordered_map<size_t, Kmer>& kmer_id2kmer) {
-        for (size_t i = 0; i < seq.size() - 1; i++) {
+    // Copy constructor
+    SequenceContainer(const SequenceContainer& other) {
+        container_size_ = other.container_size_;
+        size_ = other.size_;
+        counter = other.counter;
+        merge_count = other.merge_count;
+        max_heap = other.max_heap;
+
+        array_of_tokens = new size_t[container_size_];
+        memcpy(array_of_tokens, other.array_of_tokens, container_size_ * sizeof(size_t));
+
+        array_of_prevs = new size_t[container_size_];
+        memcpy(array_of_prevs, other.array_of_prevs, container_size_ * sizeof(size_t));
+
+        array_of_nexts = new size_t[container_size_];
+        memcpy(array_of_nexts, other.array_of_nexts, container_size_ * sizeof(size_t));
+    }
+
+    // Copy assignment operator
+    SequenceContainer& operator=(const SequenceContainer& other) {
+        if (this != &other) {
+            container_size_ = other.container_size_;
+            size_ = other.size_;
+            counter = other.counter;
+            merge_count = other.merge_count;
+            max_heap = other.max_heap;
+
+            if (array_of_tokens != nullptr) delete[] array_of_tokens;
+            array_of_tokens = new size_t[container_size_];
+            memcpy(array_of_tokens, other.array_of_tokens, container_size_ * sizeof(size_t));
+
+            if (array_of_prevs != nullptr) delete[] array_of_prevs;
+            array_of_prevs = new size_t[container_size_];
+            memcpy(array_of_prevs, other.array_of_prevs, container_size_ * sizeof(size_t));
+
+            if (array_of_nexts != nullptr) delete[] array_of_nexts;
+            array_of_nexts = new size_t[container_size_];
+            memcpy(array_of_nexts, other.array_of_nexts, container_size_ * sizeof(size_t));
+        }
+        return *this;
+    }
+
+    
+
+    
+
+    void init_in_thread(size_t thread_id, size_t start, size_t end, const std::vector<TokenType>& seq,
+                        std::unordered_map<Kmer, size_t, TupleHash>& kmer2kmer_id,
+                        std::unordered_map<size_t, Kmer>& kmer_id2kmer) {
+        // Add the code from the original init_in_single_thread function here.
+        // Make sure to replace the loop with: for (size_t i = start; i < end - 1; i++) { ... }
+        // Also, protect shared data structures (kmer2kmer_id and kmer_id2kmer) using maps_mutex.
+
+        for (size_t i = start; i < end; i++) {
+
+            if (i == container_size_) {
+                break;
+            }
 
             if (i && i % 1000000 == 0) {
-                std::cout << "Processed " << 100 * i / seq.size() << "%% tokens from " << seq.size() << std::endl;
+                // protect with maps_mutex
+                std::lock_guard<std::mutex> lock(maps_mutex);
+                std::cout << "Processed " << 100 * i / container_size_ << "%% tokens from " << container_size_ << " in " << thread_id <<  std::endl;
             }
 
-            TokenType a = seq[i];
-            TokenType b = seq[i + 1];
-            Kmer pair = std::make_tuple(a, b);
-
-            if (kmer2kmer_id.find(pair) == kmer2kmer_id.end()) {
-                kmer2kmer_id[pair] = kmer2kmer_id.size();
-                kmer_id2kmer[kmer_id2kmer.size()] = pair;
-            }
-            size_t kmer_id = kmer2kmer_id[pair];
-
-            bool help_token = false;
-            if (a <= N_HELP_TOKENS || b <= N_HELP_TOKENS) {
-                help_token = true;
-            }
-            append(i, kmer_id, help_token);
-        }
-
-        for (const auto& [kmer_id, count] : counter) {
-            max_heap.push(std::make_pair(count, kmer_id));
+            process_item(i, seq, kmer2kmer_id, kmer_id2kmer);
         }
     }
 
-    static void process_chunk(size_t thread_id, const std::vector<TokenType>& seq, size_t start, size_t end, SequenceContainer& container, std::unordered_map<Kmer, size_t, TupleHash>& kmer2kmer_id, std::unordered_map<size_t, Kmer>& kmer_id2kmer) {
-
-        for (size_t i = start; i < end - 1; i++) {
-            TokenType a = seq.at(i);
-            TokenType b = seq.at(i + 1);
-            Kmer pair = std::make_tuple(a, b);
-            bool help_token = false;
-            if (a <= N_HELP_TOKENS || b <= N_HELP_TOKENS) {
-                help_token = true;
-            }
-            size_t kmer_id;
-            {
-                std::lock_guard<std::mutex> lock(hash_mutex);
-                if (kmer2kmer_id.find(pair) == kmer2kmer_id.end()) {
-                    kmer2kmer_id[pair] = kmer2kmer_id.size();
-                    kmer_id2kmer[kmer_id2kmer.size()] = pair;
-                }
-                kmer_id = kmer2kmer_id.at(pair);
-            }
-            container.append_simple(i, kmer_id, help_token);
-            if (i && i % 1000000 == 0) {
-                std::lock_guard<std::mutex> lock(cout_mutex);
-                std::cout << "Thread " << thread_id << ": Processed " << 100. * (i-start) / (end - 1 - start) << " tokens from " << (end - 1 - start) << std::endl;
-            }
-        }
-    }
-
-    SequenceContainer(const std::vector<TokenType>& seq, std::unordered_map<Kmer, size_t, TupleHash>& kmer2kmer_id, std::unordered_map<size_t, Kmer>& kmer_id2kmer, size_t num_threads) : head(nullptr), tail(nullptr), size_(0) {
-
-        if (num_threads == 1) {
-            init_in_single_thread(seq, kmer2kmer_id, kmer_id2kmer);
-            return;
-        }
-
-        size_t chunk_size = seq.size() / num_threads;
-        std::vector<std::thread> threads;
-        std::vector<SequenceContainer> containers(num_threads, SequenceContainer());
+    void init_in_threads(const std::vector<TokenType>& seq,
+                            std::unordered_map<Kmer, size_t, TupleHash>& kmer2kmer_id,
+                            std::unordered_map<size_t, Kmer>& kmer_id2kmer, size_t num_threads) {
         
+        size_t chunk_size = container_size_ / num_threads;
+        counter.set_token(0, 1);
+        std::vector<std::thread> threads;
         for (size_t i = 0; i < num_threads; i++) {
             size_t start = i * chunk_size;
-            size_t end = (i == num_threads - 1) ? seq.size() : start + chunk_size;
-            std::cout << "Adding thread " << i << ": Processing chunk from " << start << " to " << end << " " << seq.size() << std::endl;
-            threads.emplace_back([&, i, start, end, seq = std::cref(seq), container = std::ref(containers[i])] {
-                    process_chunk(i,  seq, start, end, container, kmer2kmer_id, kmer_id2kmer);
+            size_t end = (i + 1) * chunk_size;
+
+            if (i == num_threads - 1) {
+                end = container_size_;
+            }
+             threads.emplace_back([&, i, start, end, seq = std::cref(seq), kmer2kmer_id = std::ref(kmer2kmer_id), kmer_id2kmer = std::ref(kmer_id2kmer)] {
+                    init_in_thread(i, start, end, seq, kmer2kmer_id, kmer_id2kmer);
             });
         }
 
@@ -145,269 +125,324 @@ public:
             t.join();
         }
 
-        std::cout << "All threads compeleted." << std::endl;
-        for (size_t i = 0; i < num_threads; i++) {
-            merge(std::move(containers[i]), kmer2kmer_id, kmer_id2kmer);
-        }
-
-        // recompute counter and positions
-        std::cout << "Recomputing counter and positions..." << std::endl;
-        for (const auto& [kmer_id, count] : counter) {
-            positions[kmer_id].clear();
-        }
-        counter.clear();
-        // reserve counter and positions
-        counter.reserve(kmer2kmer_id.size());
-        positions.reserve(kmer2kmer_id.size());
-
-        for (auto it = begin(); it != end(); ++it) {
-            // add progress bar here
-            if (it->index % 1000000 == 0) {
-                std::cout << "Processed " << 100 * it->index / size() << "%% tokens from " << size() << std::endl;
+        for (size_t i = 1; i < counter.size(); i++) {
+            if (counter.is_helper_kmer(i) || counter.get(i) == 0) {
+                continue;
             }
-
-            if (!it->help_token) {
-                counter[it->kmer_id]++;
-                positions[it->kmer_id].insert(it->index);
-            }
+            max_heap.push(std::make_pair(counter.get(i), i));
         }
-
-        std::cout << "Updating max heap..." << std::endl;
-        for (const auto& [kmer_id, count] : counter) {
-            max_heap.push(std::make_pair(count, kmer_id));
-        }
-        std::cout << "Max heap updated." << std::endl;
     }
 
-    void append(size_t index, size_t kmer, bool help_token) {
-        Node* newNode = new Node{index, kmer, help_token, nullptr, nullptr};
-        if (!head) {
-            head = tail = newNode;
-        } else {
-            newNode->prev = tail;
-            tail->next = newNode;
-            tail = newNode;
+    void process_item(size_t i, const std::vector<TokenType>& seq, std::unordered_map<Kmer, size_t, TupleHash>& kmer2kmer_id, std::unordered_map<size_t, Kmer>& kmer_id2kmer) {
+        TokenType a = seq[i];
+        TokenType b = seq[i + 1];
+        Kmer pair = std::make_tuple(a, b);
+
+        char help_token = 0;
+        if (a <= N_HELP_TOKENS || b <= N_HELP_TOKENS) {
+            help_token = 1;
         }
+
+        if (kmer2kmer_id.find(pair) == kmer2kmer_id.end()) {
+            std::lock_guard<std::mutex> lock(maps_mutex);
+            kmer2kmer_id[pair] = kmer2kmer_id.size();
+            kmer_id2kmer[kmer_id2kmer.size()] = pair;
+            if (!help_token) {
+                counter.init_positions(kmer2kmer_id[pair], 1000000);
+            }
+        }
+
+        size_t kmer_id = kmer2kmer_id[pair];
+
+        array_of_tokens[i] = kmer_id;
+        if (i == 0) {
+            array_of_prevs[i] = i;
+        } else {
+            array_of_prevs[i] = i - 1;
+        }
+        if (i == seq.size() - 2) {
+            array_of_nexts[i] = container_size_;
+        } else {
+            array_of_nexts[i] = i + 1;
+        }
+        
+
+        counter.set_token(kmer_id, help_token);
         if (!help_token) {
-            counter[kmer]++;
-            positions[kmer].insert(index);
+            counter.increase(kmer_id);
+            counter.add_position(kmer_id, i);
         }
-        indexMap[index] = newNode;
         size_++;
     }
 
-    void append_simple(size_t index, size_t kmer, bool help_token) {
-        Node* newNode = new Node{index, kmer, help_token, nullptr, nullptr};
-        if (!head) {
-            head = tail = newNode;
-        } else {
-            newNode->prev = tail;
-            tail->next = newNode;
-            tail = newNode;
-        }
-        indexMap[index] = newNode;
-        size_++;
-    }
+    void init_in_single_thread(const std::vector<TokenType>& seq, std::unordered_map<Kmer, size_t, TupleHash>& kmer2kmer_id, std::unordered_map<size_t, Kmer>& kmer_id2kmer) {
+        
+        counter.set_token(0, 1);
 
-    void merge(SequenceContainer&& other, std::unordered_map<Kmer, size_t, TupleHash>& kmer2kmer_id, std::unordered_map<size_t, Kmer>& kmer_id2kmer) {
-        ++merge_count;
-        std::cout << "Merging containers (" << merge_count << ")..." << std::endl;
+        for (size_t i = 0; i < container_size_ - 1; i++) {
 
-        if (!other.head) {
-            return;
-        }
-
-        if (!head) {
-            head = other.head;
-            tail = other.tail;
-        } else {
-            // Handle border nodes between parts
-            TokenType a = std::get<1>(kmer_id2kmer[tail->kmer_id]);
-            TokenType b = std::get<0>(kmer_id2kmer[other.head->kmer_id]);
-            Kmer border_pair = std::make_tuple(a, b);
-
-            if (kmer2kmer_id.find(border_pair) == kmer2kmer_id.end()) {
-                kmer2kmer_id[border_pair] = kmer2kmer_id.size();
-                kmer_id2kmer[kmer_id2kmer.size()] = border_pair;
+            if (i && i % 1000000 == 0) {
+                std::cout << "Processed " << 100 * i / container_size_ << "%% tokens from " << container_size_ << std::endl;
             }
-            size_t border_kmer_id = kmer2kmer_id[border_pair];
-
-            tail->kmer_id = border_kmer_id;
-
-            tail->next = other.head;
-            other.head->prev = tail;
-            tail = other.tail;
+            process_item(i, seq, kmer2kmer_id, kmer_id2kmer);
         }
 
-        size_ += other.size_;
+        // counter.diagnostic_print_of_state();
 
-        for (const auto& [index, node] : other.indexMap) {
-            indexMap[index] = node;
-        }
-
-        other.head = nullptr;
-        other.tail = nullptr;
-    }
-
-    ~SequenceContainer() {
-        while (head) {
-            Node* temp = head;
-            head = head->next;
-            if (temp != nullptr) delete temp;
+        for (size_t i = 1; i < counter.size(); i++) {
+            if (counter.is_helper_kmer(i) || counter.get(i) == 0) {
+                continue;
+            }
+            max_heap.push(std::make_pair(counter.get(i), i));
         }
     }
 
-    Node* operator[](size_t index) {
-        if (index < size_) {
-            return indexMap[index];
+    SequenceContainer(const std::vector<TokenType>& seq, std::unordered_map<Kmer, size_t, TupleHash>& kmer2kmer_id, std::unordered_map<size_t, Kmer>& kmer_id2kmer, size_t num_threads) {
+        
+        std::cout << "Initializing container" << std::endl;
+        size_ = 0;
+        array_of_tokens = new size_t[seq.size()];
+        array_of_prevs = new size_t[seq.size()];
+        array_of_nexts = new size_t[seq.size()+2];
+        container_size_ = seq.size();
+
+        for (size_t i = 0; i < container_size_; i++) {
+            array_of_tokens[i] = 0; // 1-based, zero is reserved for empty
+            array_of_prevs[i] = 0; // 0-base, head as index == prevs
+            array_of_nexts[i] = 0; // 0-base, tail as next == total size
         }
-        return nullptr;
+        for (size_t i = container_size_-2; i < container_size_+2; i++) {
+            array_of_nexts[i] = 0;
+        }
+        // positions also 1-based
+        std::cout << "Done" << std::endl;
+
+        counter = CounterContainer(kmer_id2kmer.size());
+
+        if (num_threads == 1) {
+            init_in_single_thread(seq, kmer2kmer_id, kmer_id2kmer);
+        } else {
+            init_in_threads(seq, kmer2kmer_id, kmer_id2kmer, num_threads);
+        }
     }
 
     void display(std::unordered_map<TokenType, std::string>& alphabet_map, std::unordered_map<size_t, Kmer>& kmer_id2kmer) {
-        Node* temp = head;
-
-        while (temp) {
-
-            Kmer kmer = kmer_id2kmer[temp->kmer_id];
-
+        
+        for (size_t i=0; i < container_size_; i++) {
+            if (array_of_tokens[i] == 0) {
+                continue;
+            }
+            Kmer kmer = kmer_id2kmer[array_of_tokens[i]];
             std::cout << alphabet_map.at(std::get<0>(kmer)) << "|" << alphabet_map.at(std::get<1>(kmer)) << " ";
-            temp = temp->next;
         }
         std::cout << std::endl;
     }
 
-    bool removeAtIndex(size_t index) {
+    void diagnostic_print_of_state() {
+        // print all variables
+        std::cout << "size_ " << size_ << std::endl;
+        std::cout << "container_size_ " << container_size_ << std::endl;
+        std::cout << "array_of_tokens" << std::endl;
+        for (size_t i=0; i < container_size_; i++) {
+            std::cout << array_of_tokens[i] << " ";
+        }
+        std::cout << std::endl;
+        std::cout << "array_of_prevs" << std::endl;
+        for (size_t i=0; i < container_size_; i++) {
+            std::cout << array_of_prevs[i] << " ";
+        }
+        std::cout << std::endl;
+        std::cout << "array_of_nexts" << std::endl;
+        for (size_t i=0; i < container_size_; i++) {
+            std::cout << array_of_nexts[i] << " ";
+        }
+        std::cout << std::endl;
+        std::cout << "counter" << std::endl;
+        counter.diagnostic_print_of_state();
         
-        Node* currentNode = indexMap[index];
+    }
 
-        if (currentNode->prev == nullptr) {
-            head = currentNode->next;
-        } else {
-            currentNode->prev->next = currentNode->next;
+    void save_bpe_to_file(std::string output_bpe_encoding_file, std::unordered_map<TokenType, std::string>& alphabet_map, std::unordered_map<size_t, Kmer>& kmer_id2kmer) {
+        std::ofstream out_file(output_bpe_encoding_file);
+        if (out_file.is_open()) {
+            std::string last;
+            for (size_t i=0; i < container_size_; i++) {
+                if (array_of_tokens[i] == 0) {
+                    // std::cout << i << " " << 0 << " " << 0 << "|" << 0 << std::endl;
+                    continue;
+                }
+                Kmer kmer = kmer_id2kmer[array_of_tokens[i]];
+                size_t next_i = array_of_nexts[i];
+                size_t next_token_id = array_of_tokens[next_i];
+                bool next_is_helper = counter.is_helper_kmer(next_token_id);
+                bool is_helper = counter.is_helper_kmer(array_of_tokens[i]);
+                if (is_helper) {
+                    last = "";
+                    continue;
+                }
+                last = alphabet_map.at(std::get<1>(kmer));
+
+                if (!next_is_helper) {
+                    out_file << alphabet_map.at(std::get<0>(kmer)) << " ";
+                } else {
+                    out_file << alphabet_map.at(std::get<0>(kmer)) << " " << alphabet_map.at(std::get<1>(kmer)) << "\n";
+                }
+            }
+            out_file << last << "\n";
+            out_file.close();
         }
+    }
 
-        if (currentNode->next == nullptr) {
-            tail = currentNode->prev;
-        } else {
-            currentNode->next->prev = currentNode->prev;
+
+
+    void print_queue(std::unordered_map<TokenType, std::string>& alphabet_map, std::unordered_map<size_t, Kmer>& kmer_id2kmer) {
+        
+        // iter and print max_heap
+        auto temp = max_heap;
+        while (!temp.empty()) {
+            Kmer kmer = kmer_id2kmer[temp.top().second];
+            std::cout << temp.top().first << " " << alphabet_map.at(std::get<0>(kmer)) << "|" << alphabet_map.at(std::get<1>(kmer)) << " real counts: " << counter.get(temp.top().second) << std::endl;
+            temp.pop();
         }
+    }
 
-        // Update indexVector
-        indexMap.erase(index);
-
-        // Update counter and positions
-        counter[currentNode->kmer_id]--;
+    bool removeAtIndex(size_t index) {
+        size_t kmer_id = array_of_tokens[index];
+        array_of_tokens[index] = 0;
+        if (index == array_of_prevs[index]) {
+            /// START A|B ...
+            array_of_prevs[array_of_nexts[index]] = array_of_nexts[index];
+        } else if (container_size_ == array_of_nexts[index]) {
+            /// ...   A|B END
+            array_of_nexts[array_of_prevs[index]] = container_size_;
+        } else {
+            /// ... A|B ...
+            array_of_nexts[array_of_prevs[index]] = array_of_nexts[index];
+            array_of_prevs[array_of_nexts[index]] = array_of_prevs[index];
+        }
+        counter.decrease(kmer_id);
         size_--;
-
-        delete currentNode;
         return true;
     }
 
 
-    void collapse(size_t kmer_id, size_t index, TokenType L, std::unordered_map<Kmer, size_t, TupleHash>& kmer2kmer_id, std::unordered_map<size_t, Kmer>& kmer_id2kmer) {
+    void collapse(size_t kmer_id, TokenType L, std::unordered_map<Kmer, size_t, TupleHash>& kmer2kmer_id, std::unordered_map<size_t, Kmer>& kmer_id2kmer, std::unordered_map<TokenType, std::string>& alphabet_map) {
     
+        // counter.print_counts();
 
         std::unordered_set<size_t> touched_kmers;
+        PositionsContainer& positions = counter.get_positions(kmer_id);
 
-        // check indexMap has index
-        if (indexMap.find(index) == indexMap.end()) {
-            return;
-        }
-
-        Node* currentNode = indexMap[index];
-
-        if (currentNode->kmer_id != kmer_id) {
-            return;
-        }
-
-        Node* prevNode = currentNode->prev;
-
-        if (prevNode != nullptr) {
-            
-            size_t prev_kmer_id = prevNode->kmer_id;
-
-            // new kmer
-            Kmer prevKmer = kmer_id2kmer[prev_kmer_id];
-            Kmer left_kmer = std::make_tuple(std::get<0>(prevKmer), L);
-            if (kmer2kmer_id.find(left_kmer) == kmer2kmer_id.end()) {
-                kmer2kmer_id[left_kmer] = kmer2kmer_id.size();
-                kmer_id2kmer[kmer_id2kmer.size()] = left_kmer;
+        for (size_t i = 0; i < positions.size(); i++) {
+            if (positions.get_plus_one_position(i) == 0) {
+                continue;
             }
-            size_t left_kmer_id = kmer2kmer_id[left_kmer];
-                 
-
-            if (!prevNode->help_token) {
-                counter[prev_kmer_id]--;
-                counter[left_kmer_id]++;
-                positions[left_kmer_id].insert(prevNode->index);
-                touched_kmers.insert(prev_kmer_id);
-                touched_kmers.insert(left_kmer_id);
+            if (i && i % 10000000 == 0) {
+                std::cout << "Processed " << i << " positions." << std::endl;
             }
+            size_t index = positions.get_plus_one_position(i);
+            if (index > 0 && kmer_id == array_of_tokens[index-1]) {
+                index -= 1;
+                
 
-            prevNode->kmer_id = left_kmer_id;
+                size_t prev_index = array_of_prevs[index]; 
+
+                size_t prev_kmer_id = array_of_tokens[prev_index];
+                char is_helper = counter.is_helper_kmer(prev_kmer_id);
+
+                if (index != array_of_prevs[index] && !is_helper) {
+                    
+                    // new kmer
+                    Kmer prevKmer = kmer_id2kmer[prev_kmer_id];
+                    Kmer left_kmer = std::make_tuple(std::get<0>(prevKmer), L);
+                    if (kmer2kmer_id.find(left_kmer) == kmer2kmer_id.end()) {
+                        kmer2kmer_id[left_kmer] = kmer2kmer_id.size();
+                        kmer_id2kmer[kmer_id2kmer.size()] = left_kmer;
+                        counter.set_token(kmer2kmer_id[left_kmer], 0);
+                        counter.init_positions(kmer2kmer_id[left_kmer], 1000);
+                    }
+                    size_t left_kmer_id = kmer2kmer_id[left_kmer];
+                    counter.decrease(prev_kmer_id);
+                    counter.increase(left_kmer_id);
+                    
+                    counter.add_position(left_kmer_id, prev_index);       
+                    array_of_tokens[prev_index] = left_kmer_id;
+
+                    touched_kmers.insert(prev_kmer_id);
+                    touched_kmers.insert(left_kmer_id);
+                }
+
+                size_t next_index = array_of_nexts[index];
+                
+                
+                if (container_size_ != array_of_nexts[index]) {
+                    size_t next_kmer_id = array_of_tokens[next_index];
+                    char is_helper_R = counter.is_helper_kmer(next_kmer_id);
+
+                     if (!is_helper_R) {
+
+                        
+
+                        Kmer next_kmer = kmer_id2kmer[next_kmer_id];
+                        Kmer right_kmer = std::make_tuple(L, std::get<1>(next_kmer));
+                        if (kmer2kmer_id.find(right_kmer) == kmer2kmer_id.end()) {
+                            kmer2kmer_id[right_kmer] = kmer2kmer_id.size();
+                            kmer_id2kmer[kmer_id2kmer.size()] = right_kmer;
+                            counter.set_token(kmer2kmer_id[right_kmer], 0);
+                            counter.init_positions(kmer2kmer_id[right_kmer], 1000);
+                        }
+                        size_t right_kmer_id = kmer2kmer_id[right_kmer];
+
+                        counter.decrease(next_kmer_id);
+                        counter.increase(right_kmer_id);
+                        
+                        counter.add_position(right_kmer_id, next_index); 
+                
+                        array_of_tokens[next_index] = right_kmer_id;
+
+                        touched_kmers.insert(next_kmer_id);
+                        touched_kmers.insert(right_kmer_id);
+                    }
+                }
+
+                removeAtIndex(index);
+
+                touched_kmers.insert(kmer_id);                
+
+            }
         }
 
-        Node* nextNode = currentNode->next;
         
-        if (nextNode != nullptr) {
-
-            size_t next_kmer_id = nextNode->kmer_id;
-
-
-            Kmer next_kmer = kmer_id2kmer[next_kmer_id];
-            Kmer right_kmer = std::make_tuple(L, std::get<1>(next_kmer));
-            if (kmer2kmer_id.find(right_kmer) == kmer2kmer_id.end()) {
-                kmer2kmer_id[right_kmer] = kmer2kmer_id.size();
-                kmer_id2kmer[kmer_id2kmer.size()] = right_kmer;
-            }
-            size_t right_kmer_id = kmer2kmer_id[right_kmer];
-
-            if (!nextNode->help_token) {
-
-                counter[next_kmer_id]--;
-                counter[right_kmer_id]++;
-                positions[right_kmer_id].insert(nextNode->index);
-                touched_kmers.insert(next_kmer_id);
-                touched_kmers.insert(right_kmer_id);
-            }
-
-            nextNode->kmer_id = right_kmer_id;
-
-        }
-
-        removeAtIndex(index);
-
-        touched_kmers.insert(kmer_id);
         
+
         for (const auto& kmer_id : touched_kmers) {
-            if (counter[kmer_id] > 0) {
-                max_heap.push(std::make_pair(counter[kmer_id], kmer_id));
+            if (counter.get(kmer_id) > 0 && !counter.is_helper_kmer(kmer_id)) {
+
+                // print kmer id freq and alphabet_map
+                // Kmer kmer = kmer_id2kmer[kmer_id];
+                // std::cout << "Kmer: " << alphabet_map[std::get<0>(kmer)] << alphabet_map[std::get<1>(kmer)] << " " << kmer_id << " " << counter.get(kmer_id) << std::endl;
+
+                max_heap.push(std::make_pair(counter.get(kmer_id), kmer_id));
             } else {
-                counter.erase(kmer_id);
-                positions.erase(kmer_id);
+                if (!counter.is_helper_kmer(kmer_id)) {
+                    counter.remove(kmer_id);
+                }
             }
         }
-        
+
     }
     
-
     std::pair<size_t, size_t> get_most_frequent_pair() {
-        if (counter.empty()) {
-            throw std::runtime_error("The container is empty, cannot find the most frequent pair.");
-        }
-
+        
         while (!max_heap.empty()) {
             auto top_entry = max_heap.top();
             size_t count = top_entry.first;
             size_t kmer_id = top_entry.second;
-
-            if (counter[kmer_id] == count) {
+            if (counter.get(kmer_id) == count) {
                 return std::pair(kmer_id, count);
             }
             max_heap.pop();
         }
-
         throw std::runtime_error("Could not find the most frequent pair.");
     }
 
@@ -415,85 +450,58 @@ public:
         return size_;
     }
 
-    void process_repeat(size_t kmer_id, TokenType L, std::unordered_map<Kmer, size_t, TupleHash>& kmer2kmer_id, std::unordered_map<size_t, Kmer>& kmer_id2kmer) {
-
-        // std::cout << "Collapsing..." << std::endl;
-        size_t i = 0;
-        for (size_t index: get_positions(kmer_id)) {
-            // print progress here
-            if (i && i % 1000000 == 0) {
-                std::cout << "Processed " << i << " positions." << std::endl;
-            }
-            collapse(kmer_id, index, L, kmer2kmer_id, kmer_id2kmer);
-            ++i;
-        }
-        // std::cout << "Done." << std::endl;
-    }
-
-    std::vector<size_t> get_positions(size_t rep) {
-        const std::unordered_set<size_t>& position_set = positions.at(rep);
-        std::vector<size_t> position_vector(position_set.begin(), position_set.end());  
-        std::sort(position_vector.begin(), position_vector.end());
-        return position_vector;
-    }
-
-    // print counter
-    void print_counter(std::unordered_map<TokenType, std::string>& alphabet_map, std::unordered_map<size_t, Kmer>& kmer_id2kmer) {
-        for (const auto& entry : counter) {
-
-            Kmer kmer = kmer_id2kmer.at(entry.first);
-
-            std::cout << alphabet_map.at(std::get<0>(kmer)) << " " << alphabet_map.at(std::get<1>(kmer)) << " " << entry.second << std::endl;
-        }
-        // print get_most_frequent_pair
-
-        Kmer kmer = kmer_id2kmer.at(get_most_frequent_pair().first);
-
-        std::cout << "Most frequent pair: " << alphabet_map.at(std::get<0>(kmer)) << " " << alphabet_map.at(std::get<1>(kmer)) << " " << get_most_frequent_pair().second << std::endl;
-    }
-
-
-    iterator begin() const { return iterator(head); }
-    iterator end() const { return iterator(nullptr); }
-
+    
     std::vector<TokenType> get_as_vector(std::unordered_map<size_t, Kmer>& kmer_id2kmer) {
         std::vector<TokenType> token_vector;
         token_vector.reserve(size_);
 
-        for (const auto& node : *this) {
-
-            Kmer kmer = kmer_id2kmer.at(node.kmer_id);
-            token_vector.emplace_back(std::get<0>(kmer));
+        for (size_t i=0; i < container_size_; ++i) {
+            if (array_of_tokens[i] != 0) {
+                size_t kmer_id = array_of_tokens[i];
+                Kmer kmer = kmer_id2kmer.at(kmer_id);
+                token_vector.emplace_back(std::get<0>(kmer));
+            }
+            if (i == container_size_ - 1) {
+                size_t kmer_id = array_of_tokens[i];
+                Kmer kmer = kmer_id2kmer.at(kmer_id);
+                token_vector.emplace_back(std::get<1>(kmer));
+            }
         }
-
-        // Add the last token from the last pair
-        if (tail) {
-            Kmer kmer = kmer_id2kmer.at(tail->kmer_id);
-            token_vector.emplace_back(std::get<1>(kmer));
-        }
-
         return token_vector;
     }
     
+    ~SequenceContainer() {
+        if (array_of_tokens != nullptr) {
+            delete[] array_of_tokens;
+        }
+        if (array_of_prevs != nullptr) {
+            delete[] array_of_prevs;
+        }
+        if (array_of_nexts != nullptr) {
+            delete[] array_of_nexts;
+        }
+    }
 
 private:
 
-    Node* head = nullptr;
-    Node* tail = nullptr;
+    struct ComparePair {
+        bool operator()(const std::pair<size_t, size_t> &a, const std::pair<size_t, size_t> &b) const {
+            if (a.first != b.first) {
+                return a.first < b.first; // Sort by count in descending order
+            }
+            return a.second > b.second; // Sort by kmer_id in ascending order in case of a tie
+        }
+    };
 
-    std::unordered_map<size_t, size_t> kmer2id;
-    std::unordered_map<size_t, size_t> id2kmer;
-    
-    std::unordered_map<size_t, size_t>  counter;
-    std::unordered_map<size_t, std::unordered_set<size_t>> positions;
 
+    size_t container_size_ = 0;
+    size_t* array_of_tokens = nullptr;
+    size_t* array_of_prevs = nullptr;
+    size_t* array_of_nexts = nullptr;
+    CounterContainer counter;
     size_t size_ = 0;
-    std::unordered_map<size_t, Node*> indexMap;
-    std::priority_queue<std::pair<size_t, size_t>> max_heap;
-
+    std::priority_queue<std::pair<size_t, size_t>, std::vector<std::pair<size_t, size_t>>, ComparePair> max_heap;
     uint merge_count = 0;
-
 };
-
 
 #endif
