@@ -12,6 +12,16 @@ This repository contains a C++ program that applies Byte Pair Encoding (BPE) to 
 - Transforms the input DNA sequences using the computed BPE tokens.
 - Ouput file with information about token frequencies and positions in the input sequences.
 
+## Memory requirements
+
+For the fast version (default or bpe.fast.exe):
+
+The forward and reverse T2T human genomes takes about 200 GB of RAM once and then lower it during computation. Memory requirements are linear with the size of the input sequences.
+
+For the slow version (bpe.lowmem.exe):
+
+The forward and reverse T2T human genomes takes about 20 GB of RAM. Memory requirements are linear with the size of the input sequences.
+
 ## Requirements
 
 - A C++ compiler with C++17 support.
