@@ -121,7 +121,7 @@ int main(int argc, char* argv[]) {
         alphabet_tf_map[L] = tf;
 
         std::cout << " transform data" << std::endl;
-        transform_data(seq, merged, tokens, max_tokens, to_replace, rep, tf, new_seq, L, k);
+        transform_data(seq, rep, L, k);
 
         token_to_length[L] = alphabet_map[L].size();
 
