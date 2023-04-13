@@ -380,10 +380,11 @@ public:
     }
 
     void extend_counts() {
-        std::cout << "extend_counts to " << max_size * 2 << std::endl;
-        std::atomic<CounterType>* new_counts = new std::atomic<CounterType>[max_size * 2];
-        char* new_flags = new char[max_size * 2];
-        PositionsContainer** new_positions = new PositionsContainer*[max_size * 2];
+        size_t new_size = max_size + increment;
+        std::cout << "extend_counts to " << new_size << std::endl;
+        std::atomic<CounterType>* new_counts = new std::atomic<CounterType>[new_size];
+        char* new_flags = new char[new_size];
+        PositionsContainer** new_positions = new PositionsContainer*[new_size];
         for (size_t i = 0; i < max_size; i++) {
             new_flags[i] = flags[i];
             new_positions[i] = positions[i];
@@ -392,12 +393,12 @@ public:
             new_counts[i].store(counts[i].load());
         }
 
-        for (size_t i = max_size; i < max_size * 2; i++) {
+        for (size_t i = max_size; i < new_size; i++) {
             new_counts[i] = 0;
             new_flags[i] = 0;
             new_positions[i] = nullptr;
         }
-        for (CounterType i = max_size; i < max_size * 2; i++) {
+        for (CounterType i = max_size; i < new_size; i++) {
             new_counts[i] = 0;
         }
         delete[] counts;
@@ -406,7 +407,7 @@ public:
         counts = new_counts;
         flags = new_flags;
         positions = new_positions;
-        max_size *= 2;
+        max_size = new_size;
     }
 
     void diagnostic_print_of_state() {
@@ -439,6 +440,7 @@ private:
     char* flags;
     std::atomic<u_int64_t> size_ = 0;
     size_t max_size = 402653184; // 3Gb of space
+    const size_t increment = 402653184;
     // size_t max_size = 20; // 3Gb of space
 };
 

@@ -274,19 +274,32 @@ public:
                 Kmer kmer = kmer_id2kmer[array_of_tokens[i]];
                 size_t next_i = array_of_nexts[i];
                 size_t next_token_id = array_of_tokens[next_i];
+                Kmer next_kmer = kmer_id2kmer[next_token_id];
                 bool next_is_helper = counter.is_helper_kmer(next_token_id);
                 bool is_helper = counter.is_helper_kmer(array_of_tokens[i]);
                 if (is_helper) {
+                    out_file << last;
                     last = "";
+                    if (std::get<0>(kmer) == 5) {
+                        out_file << "\n";
+                    } else {
+                        out_file << alphabet_map.at(std::get<0>(kmer)) << " ";
+                    }
                     continue;
                 }
                 last = alphabet_map.at(std::get<1>(kmer));
 
-                if (!next_is_helper) {
-                    out_file << alphabet_map.at(std::get<0>(kmer)) << " ";
-                } else {
-                    out_file << alphabet_map.at(std::get<0>(kmer)) << " " << alphabet_map.at(std::get<1>(kmer)) << "\n";
-                }
+                std::string left = alphabet_map.at(std::get<0>(kmer));
+
+                out_file << left << " ";
+
+                // if (!next_is_helper) {
+                //     out_file << left << " ";
+                // } else if (std::get<1>(next_kmer) == 5) {
+                //     out_file << alphabet_map.at(std::get<0>(kmer)) << " " << alphabet_map.at(std::get<1>(kmer)) << "\n";
+                // } else {
+                //     out_file << alphabet_map.at(std::get<0>(kmer)) << " ";
+                // }
             }
             out_file << last << "\n";
             out_file.close();

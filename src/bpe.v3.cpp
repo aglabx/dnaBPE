@@ -15,7 +15,7 @@
 #include <chrono>
 
 
-std::vector<TokenType> get_data(std::string& file_name, std::string& format) {
+std::vector<TokenType> get_data(std::string& file_name, std::string& format, const std::unordered_map<std::string, TokenType>& alphabet) {
     
     std::vector<std::string> seqs;
 
@@ -31,10 +31,7 @@ std::vector<TokenType> get_data(std::string& file_name, std::string& format) {
         exit(1);
     }
     std::cout << "Get dataset" << std::endl;
-    std::string dataset = get_dataset(seqs);
-    
-    std::cout << "Convert to vector" << std::endl;
-    return convert_to_vector(dataset, alphabet);
+    return get_dataset(seqs, alphabet);
 }
 
 int main(int argc, char* argv[]) {
@@ -65,7 +62,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     
-    std::vector<TokenType> seq = get_data(file_name, format);
+    std::vector<TokenType> seq = get_data(file_name, format, alphabet);
 
     // we keep kmer only in merged, in other places we use kmer_id
     std::vector<Kmer> merged;
