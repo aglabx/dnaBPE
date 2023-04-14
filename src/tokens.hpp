@@ -8,9 +8,11 @@
 #include <numeric>
 
 const uint N_HELP_TOKENS = 6;
-const uint MAX_N_TOKENS = 65535;
+// const uint MAX_N_TOKENS = 65535;
+// typedef std::uint16_t TokenType;
 
-typedef std::uint16_t TokenType;
+const uint MAX_N_TOKENS = 4294967295;
+typedef std::uint32_t TokenType;
 typedef std::tuple<TokenType, TokenType> Kmer;
 
 

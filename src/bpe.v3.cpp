@@ -48,13 +48,13 @@ int main(int argc, char* argv[]) {
     size_t n_threads = std::stoul(argv[5]);
     std::string n_tokens_suffix = argv[4];
     const std::set<size_t> snapshot_points = {
-        512,
-        1024,
-        2048,
-        4096,
-        8192,
-        16384,
-        32768,
+        // 512,
+        // 1024,
+        // 2048,
+        // 4096,
+        // 8192,
+        // 16384,
+        // 32768,
     };
 
     if (max_tokens > MAX_N_TOKENS) {
@@ -138,7 +138,7 @@ int main(int argc, char* argv[]) {
         alphabet_tf_map[L] = tf;
         token_to_length[L] = alphabet_map[L].size();
 
-        if (L < 1000 || L % 1000 == 0) {
+        if (L < 1000 || (L < 50000 && L % 1000 == 0) || (L < 100000 && L % 10000 == 0) || (L < 1000000 && L % 100000 == 0) || (L < 10000000 && L % 1000000 == 0) || (L < 100000000 && L % 10000000 == 0) || (L % 100000000 == 0)) {
             
             end_time = std::chrono::high_resolution_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
@@ -156,9 +156,9 @@ int main(int argc, char* argv[]) {
 
         // std::cout << " new size: " << seq.size() << std::endl;
 
-        if (snapshot_points.find(L) != snapshot_points.end()) {
-            save_snapshot(tokens, merged, kmer2kmer_id, rev_tokens, seq, alphabet_map, alphabet_tf_map, output_prefix, std::to_string(L), false);
-        }
+        // if (snapshot_points.find(L) != snapshot_points.end()) {
+        //     save_snapshot(tokens, merged, kmer2kmer_id, rev_tokens, seq, alphabet_map, alphabet_tf_map, output_prefix, std::to_string(L), false);
+        // }
 
         
 
@@ -168,13 +168,14 @@ int main(int argc, char* argv[]) {
         // std::cin >> status;
     }
 
+
     std::vector<TokenType> raw_seq = container.get_as_vector(kmer_id2kmer);
     
     save_snapshot(tokens, merged, kmer2kmer_id, rev_tokens, raw_seq, alphabet_map, alphabet_tf_map, output_prefix, std::to_string(L), true);
     
     // container.diagnostic_print_of_state();
 
-    std::string output_bpe_encoding_file = output_prefix + "." + n_tokens_suffix + ".bpe";
+    std::string output_bpe_encoding_file = output_prefix + "." + std::to_string(L) + ".bpe";
     container.save_bpe_to_file(output_bpe_encoding_file, alphabet_map, kmer_id2kmer);
 
     std::cout << "Saving DONE" << std::endl;

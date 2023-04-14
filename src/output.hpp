@@ -59,10 +59,10 @@ void save_snapshot(
         size_t kmer_id = kmer2kmer_id.at(kmer_);
         TokenType token = rev_tokens[kmer_id];
         std::string kmer_seq = alphabet_map.at(token);
-        if (save_seq && kmer2tf.at(kmer_seq) == 0) {
-            continue;
-        }
-        poses_file << kmer_seq << "\t" << alphabet_tf_map.at(token) << "\t" << kmer2tf.at(kmer_seq) << "\t";
+        // if (save_seq && kmer2tf.at(kmer_seq) == 0) {
+        //     continue;
+        // }
+        poses_file << token << "\t" << kmer_seq << "\t" << alphabet_map.at(std::get<0>(kmer_)) << ":" << alphabet_map.at(std::get<0>(kmer_)) << "\t" << alphabet_tf_map.at(token) << "\t" << kmer2tf.at(kmer_seq) << "\t";
         for (const auto& pos : kmer2poses.at(kmer_seq)) {
             poses_file << pos.first << ":" << pos.second << " ";
         }
@@ -70,11 +70,11 @@ void save_snapshot(
     }
     poses_file.close();
 
-    nlohmann::ordered_json json_data = get_json(alphabet_map, tokens, merged, kmer2kmer_id, rev_tokens);
+    // nlohmann::ordered_json json_data = get_json(alphabet_map, tokens, merged, kmer2kmer_id, rev_tokens);
 
-    std::ofstream configFile(output_model_file);
-    configFile << std::setw(2) << json_data << std::endl;
-    configFile.close();
+    // std::ofstream configFile(output_model_file);
+    // configFile << std::setw(2) << json_data << std::endl;
+    // configFile.close();
 }
 
 #endif

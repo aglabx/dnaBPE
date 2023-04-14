@@ -92,7 +92,7 @@ public:
                 break;
             }
 
-            if (i && i % 1000000 == 0) {
+            if (i && i % 10000000 == 0) {
                 // protect with maps_mutex
                 std::lock_guard<std::mutex> lock(maps_mutex);
                 std::cout << "Processed " << 100 * i / container_size_ << "%% tokens from " << container_size_ << " in " << thread_id <<  std::endl;
@@ -277,29 +277,36 @@ public:
                 Kmer next_kmer = kmer_id2kmer[next_token_id];
                 bool next_is_helper = counter.is_helper_kmer(next_token_id);
                 bool is_helper = counter.is_helper_kmer(array_of_tokens[i]);
-                if (is_helper) {
-                    out_file << last;
-                    last = "";
-                    if (std::get<0>(kmer) == 5) {
-                        out_file << "\n";
-                    } else {
-                        out_file << alphabet_map.at(std::get<0>(kmer)) << " ";
-                    }
+
+                // out_file << i << "|" << alphabet_map.at(std::get<0>(kmer)) << "|" << alphabet_map.at(std::get<1>(kmer)) << "|L=" << last << " ";
+
+                if (std::get<0>(kmer) != 5 && std::get<1>(kmer) != 5) {
+                    
+                    out_file << alphabet_map.at(std::get<0>(kmer)) << " ";
+                    last = alphabet_map.at(std::get<1>(kmer)); 
+
+                    if (std::get<1>(next_kmer) == 5) { // ... ~|X
+                        out_file << last;
+                        last = "";
+                        continue;
+                    }               
+                }
+
+                if (std::get<0>(kmer) == 5) { // ~|X
+                    out_file << "\n";        
                     continue;
                 }
-                last = alphabet_map.at(std::get<1>(kmer));
 
-                std::string left = alphabet_map.at(std::get<0>(kmer));
+                if (std::get<1>(kmer) == 5) { // X|~
+                    continue;
+                }
 
-                out_file << left << " ";
+                
 
-                // if (!next_is_helper) {
-                //     out_file << left << " ";
-                // } else if (std::get<1>(next_kmer) == 5) {
-                //     out_file << alphabet_map.at(std::get<0>(kmer)) << " " << alphabet_map.at(std::get<1>(kmer)) << "\n";
-                // } else {
-                //     out_file << alphabet_map.at(std::get<0>(kmer)) << " ";
-                // }
+                
+                
+                
+
             }
             out_file << last << "\n";
             out_file.close();

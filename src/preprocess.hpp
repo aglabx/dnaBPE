@@ -32,8 +32,7 @@ std::vector<TokenType> get_dataset(const std::vector<std::string>& seqs, const s
             } else {
                 seq.emplace_back(alphabet.at("[UNK]"));
             }
-            /// print i if i % 1000000
-            if (i && i % 10000000 == 0) {
+            if (i && i % 100000000 == 0) {
                 std::cout << " ... " << i << "/" << N << std::endl;
             }
             ++i;
