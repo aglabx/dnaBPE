@@ -26,6 +26,8 @@ std::vector<TokenType> get_data(std::string& file_name, std::string& format, con
         get_sequences_trf(file_name, seqs);
     } else if (format == "fasta") {
         get_sequences_fasta(file_name, seqs);
+    } else if (format == "fastq") {
+        get_sequences_fastq(file_name, seqs);
     } else {
         std::cout << "Format must be either reads or fasta or trf" << std::endl;
         exit(1);
@@ -37,7 +39,7 @@ std::vector<TokenType> get_data(std::string& file_name, std::string& format, con
 int main(int argc, char* argv[]) {
 
     if (argc != 6) {
-        std::cerr << "Usage: " << argv[0] << " <input_file> <output_file_prefix> <format: reads, fasta, trf> <max_tokens> <threads>" << std::endl;
+        std::cerr << "Usage: " << argv[0] << " <input_file> <output_file_prefix> <format: reads, fasta, trf, fastq, bpe> <max_tokens> <threads>" << std::endl;
         return 1;
     }
 
@@ -71,7 +73,6 @@ int main(int argc, char* argv[]) {
     // set zero for start to mark collapsed nodes
     kmer2kmer_id[std::make_tuple(0, 0)] = 0;
     kmer_id2kmer[0] = std::make_tuple(0, 0);
-
 
     TokenType L = alphabet.size();
 
