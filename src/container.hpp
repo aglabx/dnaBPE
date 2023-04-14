@@ -107,6 +107,7 @@ public:
                             std::unordered_map<size_t, Kmer>& kmer_id2kmer, size_t num_threads) {
         
         size_t chunk_size = container_size_ / num_threads;
+        counter.init_positions(0, 0);
         counter.set_token(0, 1);
         std::vector<std::thread> threads;
         for (size_t i = 0; i < num_threads; i++) {
@@ -148,7 +149,7 @@ public:
             kmer2kmer_id[pair] = kmer2kmer_id.size();
             kmer_id2kmer[kmer_id2kmer.size()] = pair;
             if (!help_token) {
-                counter.init_positions(kmer2kmer_id[pair], 1000000);
+                counter.init_positions(kmer2kmer_id[pair], container_size_/12);
             }
         }
 

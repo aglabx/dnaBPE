@@ -13,6 +13,7 @@
 #include <mutex>
 #include <cstring>
 #include <atomic>
+#include <cmath>
 
 
 // typedef CounterType to uint32_t
@@ -273,6 +274,10 @@ public:
             std::cout << "kmer_id >= max_size" << std::endl;
             exit(1);
         }
+        size_.store(std::max(size_.load(), kmer_id + 1));
+        if (size_ >= max_size) {
+            extend_counts();
+        }
         if (positions[kmer_id] == nullptr) {
             positions[kmer_id] = new PositionsContainer(tf);
             return;
@@ -285,11 +290,6 @@ public:
             exit(1);
         }
         flags[kmer_id] = is_help_token;
-        ++size_;
-        if (size_ == max_size) {
-            extend_counts();
-        }
-        return;
     }
 
     void decrease(size_t kmer_id) {
@@ -302,7 +302,7 @@ public:
             counts[kmer_id]--;    
             return;
         }
-        std::cout << "overflow counter kmer_id > size_: " << kmer_id << " " << size_ << std::endl;
+        std::cout << "overflow counter in decrease kmer_id > size_: " << kmer_id << " " << size_ << std::endl;
     }
 
     void increase(size_t kmer_id) {
@@ -314,7 +314,7 @@ public:
             counts[kmer_id]++;
             return;
         }
-        std::cout << "overflow counter kmer_id > size_: " << kmer_id << " " << size_ << std::endl;
+        std::cout << "overflow counter in increase kmer_id > size_: " << kmer_id << " " << size_ << std::endl;
     }
 
     bool is_helper_kmer(size_t kmer_id) {
@@ -340,7 +340,7 @@ public:
             positions[kmer_id]->clear();
             return;
         }
-        std::cout << "overflow counter kmer_id > size_: " << kmer_id << " " << size_ << std::endl;
+        std::cout << "overflow counter remove kmer_id > size_: " << kmer_id << " " << size_ << std::endl;
     }
 
     CounterType get(size_t kmer_id) {
@@ -439,8 +439,8 @@ private:
     PositionsContainer** positions;
     char* flags;
     std::atomic<u_int64_t> size_ = 0;
-    size_t max_size = 402653184; // 3Gb of space
-    const size_t increment = 402653184;
+    size_t max_size = 40265318; // 3Gb of space
+    const size_t increment = 12653184;
     // size_t max_size = 20; // 3Gb of space
 };
 
