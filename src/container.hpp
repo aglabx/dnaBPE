@@ -5,7 +5,6 @@
 #include <tuple>
 #include <vector>
 #include <string>
-#include "tokens.hpp"
 #include <unordered_map>
 #include <iostream>
 #include <unordered_set>
@@ -14,6 +13,8 @@
 #include <thread>
 #include <mutex>
 #include <fstream>
+
+#include "tokens.hpp"
 #include "subcontainers.hpp"
 
 std::mutex cout_mutex;
@@ -73,19 +74,12 @@ public:
             memcpy(array_of_nexts, other.array_of_nexts, container_size_ * sizeof(size_t));
         }
         return *this;
-    }
-
-    
-
-    
+    } 
 
     void init_in_thread(size_t thread_id, size_t start, size_t end, const std::vector<TokenType>& seq,
                         std::unordered_map<Kmer, size_t, TupleHash>& kmer2kmer_id,
                         std::unordered_map<size_t, Kmer>& kmer_id2kmer) {
-        // Add the code from the original init_in_single_thread function here.
-        // Make sure to replace the loop with: for (size_t i = start; i < end - 1; i++) { ... }
-        // Also, protect shared data structures (kmer2kmer_id and kmer_id2kmer) using maps_mutex.
-
+        
         for (size_t i = start; i < end; i++) {
 
             if (i == container_size_) {
@@ -187,9 +181,6 @@ public:
             }
             process_item(i, seq, kmer2kmer_id, kmer_id2kmer);
         }
-
-        // counter.diagnostic_print_of_state();
-
         for (size_t i = 1; i < counter.size(); i++) {
             if (counter.is_helper_kmer(i) || counter.get(i) == 0) {
                 continue;
@@ -225,6 +216,13 @@ public:
         } else {
             init_in_threads(seq, kmer2kmer_id, kmer_id2kmer, num_threads);
         }
+    }
+
+    SequenceContainer(const std::string& bpe_file, const std::string& pos_file, const std::vector<TokenType>& seq, std::unordered_map<Kmer, size_t, TupleHash>& kmer2kmer_id, std::unordered_map<size_t, Kmer>& kmer_id2kmer) {
+        // read pos file (kmer_id, kmer, merge pair, _, tf, poses)
+        std::ifstream pos_stream(pos_file);
+        std::string line;
+        std::getline(pos_stream, line); // skip header
     }
 
     void display(std::unordered_map<TokenType, std::string>& alphabet_map, std::unordered_map<size_t, Kmer>& kmer_id2kmer) {
@@ -263,58 +261,57 @@ public:
         
     }
 
-    void save_bpe_to_file(std::string output_bpe_encoding_file, std::unordered_map<TokenType, std::string>& alphabet_map, std::unordered_map<size_t, Kmer>& kmer_id2kmer) {
+    void save_bpe_to_file(const std::string& output_bpe_encoding_file, const std::string& output_bpe_raw_encoding_file, std::unordered_map<TokenType, std::string>& alphabet_map, std::unordered_map<size_t, Kmer>& kmer_id2kmer) {
         std::ofstream out_file(output_bpe_encoding_file);
+        std::ofstream out_raw_file(output_bpe_raw_encoding_file);
         if (out_file.is_open()) {
             std::string last;
+            TokenType last_token = 0;
             for (size_t i=0; i < container_size_; i++) {
                 if (array_of_tokens[i] == 0) {
-                    // std::cout << i << " " << 0 << " " << 0 << "|" << 0 << std::endl;
                     continue;
                 }
                 Kmer kmer = kmer_id2kmer[array_of_tokens[i]];
                 size_t next_i = array_of_nexts[i];
                 size_t next_token_id = array_of_tokens[next_i];
                 Kmer next_kmer = kmer_id2kmer[next_token_id];
-                bool next_is_helper = counter.is_helper_kmer(next_token_id);
-                bool is_helper = counter.is_helper_kmer(array_of_tokens[i]);
-
-                // out_file << i << "|" << alphabet_map.at(std::get<0>(kmer)) << "|" << alphabet_map.at(std::get<1>(kmer)) << "|L=" << last << " ";
 
                 if (std::get<0>(kmer) != 5 && std::get<1>(kmer) != 5) {
                     
                     out_file << alphabet_map.at(std::get<0>(kmer)) << " ";
+                    out_raw_file << std::get<0>(kmer) << " ";
+
                     last = alphabet_map.at(std::get<1>(kmer)); 
+                    last_token = std::get<1>(kmer);
 
                     if (std::get<1>(next_kmer) == 5) { // ... ~|X
-                        out_file << last;
+                        if (last != "") {
+                            out_file << last;
+                            out_raw_file << last_token;
+                        }
                         last = "";
                         continue;
                     }               
                 }
 
                 if (std::get<0>(kmer) == 5) { // ~|X
-                    out_file << "\n";        
+                    out_file << "\n";
+                    out_raw_file << "\n";    
                     continue;
                 }
 
                 if (std::get<1>(kmer) == 5) { // X|~
                     continue;
-                }
-
-                
-
-                
-                
-                
-
+                }   
             }
-            out_file << last << "\n";
+            if (last != "") {
+                out_file << last;
+                out_raw_file << last_token;
+            }
             out_file.close();
+            out_raw_file.close();
         }
     }
-
-
 
     void print_queue(std::unordered_map<TokenType, std::string>& alphabet_map, std::unordered_map<size_t, Kmer>& kmer_id2kmer) {
         
@@ -433,16 +430,8 @@ public:
             }
         }
 
-        
-        
-
         for (const auto& kmer_id : touched_kmers) {
             if (counter.get(kmer_id) > 0 && !counter.is_helper_kmer(kmer_id)) {
-
-                // print kmer id freq and alphabet_map
-                // Kmer kmer = kmer_id2kmer[kmer_id];
-                // std::cout << "Kmer: " << alphabet_map[std::get<0>(kmer)] << alphabet_map[std::get<1>(kmer)] << " " << kmer_id << " " << counter.get(kmer_id) << std::endl;
-
                 max_heap.push(std::make_pair(counter.get(kmer_id), kmer_id));
             } else {
                 if (!counter.is_helper_kmer(kmer_id)) {
@@ -513,7 +502,6 @@ private:
             return a.second > b.second; // Sort by kmer_id in ascending order in case of a tie
         }
     };
-
 
     size_t container_size_ = 0;
     size_t* array_of_tokens = nullptr;

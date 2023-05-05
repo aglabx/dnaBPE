@@ -5,15 +5,18 @@ LDFLAGS=-g
 LDLIBS=
 
 TARGET=bin/bpe.exe
+TARGET_LONG=bin/bpe.long.exe
 TARGET_DEV=bin/bpe.dev.exe
 TARGET_SLOW=bin/bpe.slow.exe
 TARGET_FAST=bin/bpe.fast.exe
 
-SRCS=nlohmann/json.hpp src/tokens.hpp src/tokens_model.hpp src/readers.hpp src/preprocess.hpp src/core.hpp src/output.hpp src/subcontainers.hpp src/container.hpp src/bpe.v3.cpp
+SRCS=nlohmann/json.hpp src/tokens.hpp src/tokens_model.hpp src/readers.hpp src/preprocess.hpp src/core.hpp src/output.hpp src/subcontainers.hpp src/container.hpp src/positions.hpp src/bpe.v3.cpp
 
-SRCS_SLOW=nlohmann/json.hpp src/tokens.hpp src/tokens_model.hpp src/readers.hpp src/preprocess.hpp src/core.hpp src/output.hpp src/subcontainers.hpp src/container.hpp src/bpe.v2.cpp
+SRCS_SLOW=nlohmann/json.hpp src/tokens.hpp src/tokens_model.hpp src/readers.hpp src/preprocess.hpp src/core.hpp src/output.hpp src/subcontainers.hpp src/container.hpp src/positions.hpp src/bpe.v2.cpp
 
 all: $(TARGET) $(TARGET_DEV) #$(TARGET_SLOW)
+
+long: $(TARGET_LONG)
 
 prod: $(TARGET)
 
@@ -27,6 +30,9 @@ $(TARGET): $(SRCS)
 
 $(TARGET_DEV): $(SRCS)
 	$(CXX) $(CXXFLAGS_DEV) $(SRCS) $(LDLIBS) -o $(TARGET_DEV) $(LDFLAGS) 
+
+$(TARGET_LONG): $(SRCS)
+	$(CXX) $(CXXFLAGS) $(SRCS) $(LDLIBS) -o $(TARGET_LONG)
 
 # $(TARGET_SLOW): $(SRCS_SLOW)
 # 	git checkout e351f3f

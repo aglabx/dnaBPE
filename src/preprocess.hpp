@@ -4,9 +4,10 @@
 #include <string>
 #include <vector>
 #include <sstream>
-#include "tokens.hpp"
 #include <unordered_map>
 #include <iostream>
+
+#include "tokens.hpp"
 
 
 std::vector<TokenType> get_dataset(const std::vector<std::string>& seqs, const std::unordered_map<std::string, TokenType>& alphabet) {

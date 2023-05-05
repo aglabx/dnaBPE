@@ -62,7 +62,7 @@ void save_snapshot(
         // if (save_seq && kmer2tf.at(kmer_seq) == 0) {
         //     continue;
         // }
-        poses_file << token << "\t" << kmer_seq << "\t" << alphabet_map.at(std::get<0>(kmer_)) << ":" << alphabet_map.at(std::get<0>(kmer_)) << "\t" << alphabet_tf_map.at(token) << "\t" << kmer2tf.at(kmer_seq) << "\t";
+        poses_file << token << "\t" << kmer_seq << "\t" << std::get<0>(kmer_) << ":" << std::get<1>(kmer_) << "\t" << alphabet_tf_map.at(token) << "\t" << kmer2tf.at(kmer_seq) << "\t";
         for (const auto& pos : kmer2poses.at(kmer_seq)) {
             poses_file << pos.first << ":" << pos.second << " ";
         }
