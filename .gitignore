@@ -1,7 +1,6 @@
 .vscode
 text.md
 data/
-test.1
 .gitignore
 analysis.txt
 analysis2.txt
@@ -18,3 +17,7 @@ output2.png
 src/bpe.v3.dSYM/Contents/Info.plist
 src/bpe.v3
 src/bpe.v3.dSYM/Contents/Resources/DWARF/bpe.v3
+YouTokenToMe/*
+YouTokenToMe
+bin/*
+src/bpe.v3.dSYM/Contents/Resources/Relocations/aarch64/bpe.v3.yml
