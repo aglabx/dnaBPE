@@ -176,7 +176,7 @@ public:
 
         for (size_t i = 0; i < container_size_ - 1; i++) {
 
-            if (i && i % 1000000 == 0) {
+            if (i && i % 10000000 == 0) {
                 std::cout << "Processed " << 100 * i / container_size_ << "%% tokens from " << container_size_ << std::endl;
             }
             process_item(i, seq, kmer2kmer_id, kmer_id2kmer);
@@ -276,13 +276,13 @@ public:
                 size_t next_token_id = array_of_tokens[next_i];
                 Kmer next_kmer = kmer_id2kmer[next_token_id];
 
-                std::cout << "Debug: " <<  std::get<0>(kmer) << "|" << std::get<1>(kmer) << " " << alphabet_map.at(std::get<0>(kmer)) << "|" << alphabet_map.at(std::get<1>(kmer)) << " " << std::endl;
+                // std::cout << "Debug: " <<  std::get<0>(kmer) << "|" << std::get<1>(kmer) << " " << alphabet_map.at(std::get<0>(kmer)) << "|" << alphabet_map.at(std::get<1>(kmer)) << " " << std::endl;
 
                 if (std::get<0>(kmer) != 5 && std::get<1>(kmer) != 5) {
                     
 
                     out_file << alphabet_map.at(std::get<0>(kmer)) << " ";
-                    std::cout << "TOFILE=>" << alphabet_map.at(std::get<0>(kmer)) << " ";
+                    // std::cout << "TOFILE=>" << alphabet_map.at(std::get<0>(kmer)) << " ";
 
                     out_raw_file << std::get<0>(kmer) << " ";
 
@@ -298,7 +298,7 @@ public:
                         // }
                         last = "";
                         
-                        std::cout << "<<--" << std::endl;
+                        // std::cout << "<<--" << std::endl;
                         continue;
                     }               
                 }
@@ -317,115 +317,23 @@ public:
                     out_file << alphabet_map.at(std::get<0>(kmer)) << "\n";
                     out_raw_file << std::get<0>(kmer) << "\n";
                     
-                    std::cout << alphabet_map.at(std::get<0>(kmer)) << "<<--" << std::endl;
+                    // std::cout << alphabet_map.at(std::get<0>(kmer)) << "<<--" << std::endl;
                     continue;
                 }
 
 
-                std::cout << "<<--" << std::endl;
+                // std::cout << "<<--" << std::endl;
             }
             if (last != "") {
                 out_file << last;
-                std::cout << last; // to file edbug
+                // std::cout << last; // to file edbug
                 
                 out_raw_file << last_token;
             }
 
-            std::cout << "<<--" << std::endl;
+            // std::cout << "<<--" << std::endl;
             out_file.close();
             out_raw_file.close();
-        }
-    }
-
-    void print_bpe_to_stdout(std::unordered_map<TokenType, std::string>& alphabet_map, std::unordered_map<size_t, Kmer>& kmer_id2kmer) {
-        
-        std::string last;
-        TokenType last_token = 0;
-        for (size_t i=0; i < container_size_; i++) {
-            if (array_of_tokens[i] == 0) {
-                continue;
-            }
-            Kmer kmer = kmer_id2kmer[array_of_tokens[i]];
-            size_t next_i = array_of_nexts[i];
-            size_t next_token_id = array_of_tokens[next_i];
-            Kmer next_kmer = kmer_id2kmer[next_token_id];
-
-            // std::cout << "Debug: " <<  std::get<0>(kmer) << "|" << std::get<1>(kmer) << " " << alphabet_map.at(std::get<0>(kmer)) << "|" << alphabet_map.at(std::get<1>(kmer)) << " " << std::endl;
-
-            if (std::get<0>(kmer) != 5 && std::get<1>(kmer) != 5) {
-                
-
-                std::cout << alphabet_map.at(std::get<0>(kmer));
-                last = alphabet_map.at(std::get<1>(kmer)); 
-                last_token = std::get<1>(kmer);
-
-                if (std::get<1>(next_kmer) == 5) { // ... ~|X
-                    if (last != "") {
-                        std::cout << last;
-                    }
-                    last = "";
-                    continue;
-                }               
-            }
-
-            if (std::get<0>(kmer) == 5) { // ~|X
-                continue;
-            }
-
-            if (std::get<1>(kmer) == 5) { // X|~
-                std::cout << std::endl;
-                continue;
-            }
-        }
-        if (last != "") {
-            std::cout << last;
-            std::cout << std::endl;
-        }
-    }
-
-    void print_raw_bpe_to_stdout(std::unordered_map<TokenType, std::string>& alphabet_map, std::unordered_map<size_t, Kmer>& kmer_id2kmer) {
-        
-        std::string last;
-        TokenType last_token = 0;
-        for (size_t i=0; i < container_size_; i++) {
-            if (array_of_tokens[i] == 0) {
-                continue;
-            }
-            Kmer kmer = kmer_id2kmer[array_of_tokens[i]];
-            size_t next_i = array_of_nexts[i];
-            size_t next_token_id = array_of_tokens[next_i];
-            Kmer next_kmer = kmer_id2kmer[next_token_id];
-
-            // std::cout << "Debug: " <<  std::get<0>(kmer) << "|" << std::get<1>(kmer) << " " << alphabet_map.at(std::get<0>(kmer)) << "|" << alphabet_map.at(std::get<1>(kmer)) << " " << std::endl;
-
-            if (std::get<0>(kmer) != 5 && std::get<1>(kmer) != 5) {
-                
-
-                std::cout << std::get<0>(kmer) << " ";
-                last = alphabet_map.at(std::get<1>(kmer)); 
-                last_token = std::get<1>(kmer);
-
-                if (std::get<1>(next_kmer) == 5) { // ... ~|X
-                    if (last != "") {
-                        std::cout << std::get<1>(kmer) << " ";
-                    }
-                    last = "";
-                    continue;
-                }               
-            }
-
-            if (std::get<0>(kmer) == 5) { // ~|X
-                continue;
-            }
-
-            if (std::get<1>(kmer) == 5) { // X|~
-                std::cout << std::get<1>(kmer) << std::endl;
-                continue;
-            }
-        }
-        if (last != "") {
-            std::cout << last_token;
-            std::cout << std::endl;
         }
     }
 
