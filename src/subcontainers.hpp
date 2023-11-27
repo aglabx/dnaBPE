@@ -13,6 +13,7 @@
 #include <cstring>
 #include <atomic>
 #include <cmath>
+#include <algorithm>
 
 #include "tokens.hpp"
 #include "positions.hpp"
@@ -123,7 +124,7 @@ public:
             std::cout << "kmer_id >= max_size" << std::endl;
             exit(1);
         }
-        size_.store(std::max(size_.load(), kmer_id + 1));
+        size_.store(std::max((size_t)size_.load(), kmer_id + 1));
         if (size_ >= max_size) {
             extend_counts();
         }

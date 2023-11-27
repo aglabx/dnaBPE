@@ -14,6 +14,7 @@
 #include "core.hpp"
 #include "output.hpp"
 #include "container.hpp"
+#include <filesystem> // Include this at the top of your file
 
 
 std::vector<TokenType> get_data(std::string& file_name, std::string& format, const std::unordered_map<std::string, TokenType>& alphabet) {
@@ -61,7 +62,12 @@ int main(int argc, char* argv[]) {
     };
 
     if (max_tokens > MAX_N_TOKENS) {
-        std::cout << "Max tokens must be less than 65535" << std::endl;
+        std::cout << "Max tokens must be less than " << MAX_N_TOKENS << std::endl;
+        return 1;
+    }
+
+    if (!std::filesystem::exists(file_name)) {
+        std::cout << "File " << file_name << " does not exist" << std::endl;
         return 1;
     }
     
@@ -150,8 +156,9 @@ int main(int argc, char* argv[]) {
             start_time = std::chrono::high_resolution_clock::now();
         } 
 
+        // container.print_bpe_to_stdout(alphabet_map, kmer_id2kmer);
         container.collapse(rep, L, kmer2kmer_id, kmer_id2kmer, alphabet_map);
-
+        // container.print_bpe_to_stdout(alphabet_map, kmer_id2kmer);
         
 
         L += 1;
