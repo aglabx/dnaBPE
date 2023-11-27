@@ -5,7 +5,6 @@
 #include <tuple>
 #include <vector>
 #include <string>
-#include "tokens.hpp"
 #include <unordered_map>
 #include <iostream>
 #include <unordered_set>
@@ -14,6 +13,8 @@
 #include <thread>
 #include <mutex>
 #include <fstream>
+
+#include "tokens.hpp"
 #include "subcontainers.hpp"
 
 std::mutex cout_mutex;
@@ -73,26 +74,19 @@ public:
             memcpy(array_of_nexts, other.array_of_nexts, container_size_ * sizeof(size_t));
         }
         return *this;
-    }
-
-    
-
-    
+    } 
 
     void init_in_thread(size_t thread_id, size_t start, size_t end, const std::vector<TokenType>& seq,
                         std::unordered_map<Kmer, size_t, TupleHash>& kmer2kmer_id,
                         std::unordered_map<size_t, Kmer>& kmer_id2kmer) {
-        // Add the code from the original init_in_single_thread function here.
-        // Make sure to replace the loop with: for (size_t i = start; i < end - 1; i++) { ... }
-        // Also, protect shared data structures (kmer2kmer_id and kmer_id2kmer) using maps_mutex.
-
+        
         for (size_t i = start; i < end; i++) {
 
             if (i == container_size_) {
                 break;
             }
 
-            if (i && i % 1000000 == 0) {
+            if (i && i % 10000000 == 0) {
                 // protect with maps_mutex
                 std::lock_guard<std::mutex> lock(maps_mutex);
                 std::cout << "Processed " << 100 * i / container_size_ << "%% tokens from " << container_size_ << " in " << thread_id <<  std::endl;
@@ -107,6 +101,7 @@ public:
                             std::unordered_map<size_t, Kmer>& kmer_id2kmer, size_t num_threads) {
         
         size_t chunk_size = container_size_ / num_threads;
+        counter.init_positions(0, 0);
         counter.set_token(0, 1);
         std::vector<std::thread> threads;
         for (size_t i = 0; i < num_threads; i++) {
@@ -148,7 +143,7 @@ public:
             kmer2kmer_id[pair] = kmer2kmer_id.size();
             kmer_id2kmer[kmer_id2kmer.size()] = pair;
             if (!help_token) {
-                counter.init_positions(kmer2kmer_id[pair], 1000000);
+                counter.init_positions(kmer2kmer_id[pair], container_size_/12);
             }
         }
 
@@ -186,9 +181,6 @@ public:
             }
             process_item(i, seq, kmer2kmer_id, kmer_id2kmer);
         }
-
-        // counter.diagnostic_print_of_state();
-
         for (size_t i = 1; i < counter.size(); i++) {
             if (counter.is_helper_kmer(i) || counter.get(i) == 0) {
                 continue;
@@ -224,6 +216,13 @@ public:
         } else {
             init_in_threads(seq, kmer2kmer_id, kmer_id2kmer, num_threads);
         }
+    }
+
+    SequenceContainer(const std::string& bpe_file, const std::string& pos_file, const std::vector<TokenType>& seq, std::unordered_map<Kmer, size_t, TupleHash>& kmer2kmer_id, std::unordered_map<size_t, Kmer>& kmer_id2kmer) {
+        // read pos file (kmer_id, kmer, merge pair, _, tf, poses)
+        std::ifstream pos_stream(pos_file);
+        std::string line;
+        std::getline(pos_stream, line); // skip header
     }
 
     void display(std::unordered_map<TokenType, std::string>& alphabet_map, std::unordered_map<size_t, Kmer>& kmer_id2kmer) {
@@ -262,38 +261,173 @@ public:
         
     }
 
-    void save_bpe_to_file(std::string output_bpe_encoding_file, std::unordered_map<TokenType, std::string>& alphabet_map, std::unordered_map<size_t, Kmer>& kmer_id2kmer) {
+    void save_bpe_to_file(const std::string& output_bpe_encoding_file, const std::string& output_bpe_raw_encoding_file, std::unordered_map<TokenType, std::string>& alphabet_map, std::unordered_map<size_t, Kmer>& kmer_id2kmer) {
         std::ofstream out_file(output_bpe_encoding_file);
+        std::ofstream out_raw_file(output_bpe_raw_encoding_file);
         if (out_file.is_open()) {
             std::string last;
+            TokenType last_token = 0;
             for (size_t i=0; i < container_size_; i++) {
                 if (array_of_tokens[i] == 0) {
-                    // std::cout << i << " " << 0 << " " << 0 << "|" << 0 << std::endl;
                     continue;
                 }
                 Kmer kmer = kmer_id2kmer[array_of_tokens[i]];
                 size_t next_i = array_of_nexts[i];
                 size_t next_token_id = array_of_tokens[next_i];
-                bool next_is_helper = counter.is_helper_kmer(next_token_id);
-                bool is_helper = counter.is_helper_kmer(array_of_tokens[i]);
-                if (is_helper) {
-                    last = "";
+                Kmer next_kmer = kmer_id2kmer[next_token_id];
+
+                std::cout << "Debug: " <<  std::get<0>(kmer) << "|" << std::get<1>(kmer) << " " << alphabet_map.at(std::get<0>(kmer)) << "|" << alphabet_map.at(std::get<1>(kmer)) << " " << std::endl;
+
+                if (std::get<0>(kmer) != 5 && std::get<1>(kmer) != 5) {
+                    
+
+                    out_file << alphabet_map.at(std::get<0>(kmer)) << " ";
+                    std::cout << "TOFILE=>" << alphabet_map.at(std::get<0>(kmer)) << " ";
+
+                    out_raw_file << std::get<0>(kmer) << " ";
+
+                    last = alphabet_map.at(std::get<1>(kmer)); 
+                    last_token = std::get<1>(kmer);
+
+                    if (std::get<1>(next_kmer) == 5) { // ... ~|X
+                        // if (last != "") {
+                        //     out_file << last;
+                        //     std::cout << last; // to file edbug
+
+                        //     out_raw_file << last_token;
+                        // }
+                        last = "";
+                        
+                        std::cout << "<<--" << std::endl;
+                        continue;
+                    }               
+                }
+
+                // if (std::get<0>(kmer) == 5) { // ~|X
+                //     out_file << "\n";
+                //     std::cout << "\n"; // to file edbug
+
+                //     out_raw_file << "\n";    
+                    
+                //     std::cout << "<<--" << std::endl;
+                //     continue;
+                // }
+
+                if (std::get<1>(kmer) == 5) { // X|~
+                    out_file << alphabet_map.at(std::get<0>(kmer)) << "\n";
+                    out_raw_file << std::get<0>(kmer) << "\n";
+                    
+                    std::cout << alphabet_map.at(std::get<0>(kmer)) << "<<--" << std::endl;
                     continue;
                 }
-                last = alphabet_map.at(std::get<1>(kmer));
 
-                if (!next_is_helper) {
-                    out_file << alphabet_map.at(std::get<0>(kmer)) << " ";
-                } else {
-                    out_file << alphabet_map.at(std::get<0>(kmer)) << " " << alphabet_map.at(std::get<1>(kmer)) << "\n";
-                }
+
+                std::cout << "<<--" << std::endl;
             }
-            out_file << last << "\n";
+            if (last != "") {
+                out_file << last;
+                std::cout << last; // to file edbug
+                
+                out_raw_file << last_token;
+            }
+
+            std::cout << "<<--" << std::endl;
             out_file.close();
+            out_raw_file.close();
         }
     }
 
+    void print_bpe_to_stdout(std::unordered_map<TokenType, std::string>& alphabet_map, std::unordered_map<size_t, Kmer>& kmer_id2kmer) {
+        
+        std::string last;
+        TokenType last_token = 0;
+        for (size_t i=0; i < container_size_; i++) {
+            if (array_of_tokens[i] == 0) {
+                continue;
+            }
+            Kmer kmer = kmer_id2kmer[array_of_tokens[i]];
+            size_t next_i = array_of_nexts[i];
+            size_t next_token_id = array_of_tokens[next_i];
+            Kmer next_kmer = kmer_id2kmer[next_token_id];
 
+            // std::cout << "Debug: " <<  std::get<0>(kmer) << "|" << std::get<1>(kmer) << " " << alphabet_map.at(std::get<0>(kmer)) << "|" << alphabet_map.at(std::get<1>(kmer)) << " " << std::endl;
+
+            if (std::get<0>(kmer) != 5 && std::get<1>(kmer) != 5) {
+                
+
+                std::cout << alphabet_map.at(std::get<0>(kmer));
+                last = alphabet_map.at(std::get<1>(kmer)); 
+                last_token = std::get<1>(kmer);
+
+                if (std::get<1>(next_kmer) == 5) { // ... ~|X
+                    if (last != "") {
+                        std::cout << last;
+                    }
+                    last = "";
+                    continue;
+                }               
+            }
+
+            if (std::get<0>(kmer) == 5) { // ~|X
+                continue;
+            }
+
+            if (std::get<1>(kmer) == 5) { // X|~
+                std::cout << std::endl;
+                continue;
+            }
+        }
+        if (last != "") {
+            std::cout << last;
+            std::cout << std::endl;
+        }
+    }
+
+    void print_raw_bpe_to_stdout(std::unordered_map<TokenType, std::string>& alphabet_map, std::unordered_map<size_t, Kmer>& kmer_id2kmer) {
+        
+        std::string last;
+        TokenType last_token = 0;
+        for (size_t i=0; i < container_size_; i++) {
+            if (array_of_tokens[i] == 0) {
+                continue;
+            }
+            Kmer kmer = kmer_id2kmer[array_of_tokens[i]];
+            size_t next_i = array_of_nexts[i];
+            size_t next_token_id = array_of_tokens[next_i];
+            Kmer next_kmer = kmer_id2kmer[next_token_id];
+
+            // std::cout << "Debug: " <<  std::get<0>(kmer) << "|" << std::get<1>(kmer) << " " << alphabet_map.at(std::get<0>(kmer)) << "|" << alphabet_map.at(std::get<1>(kmer)) << " " << std::endl;
+
+            if (std::get<0>(kmer) != 5 && std::get<1>(kmer) != 5) {
+                
+
+                std::cout << std::get<0>(kmer) << " ";
+                last = alphabet_map.at(std::get<1>(kmer)); 
+                last_token = std::get<1>(kmer);
+
+                if (std::get<1>(next_kmer) == 5) { // ... ~|X
+                    if (last != "") {
+                        std::cout << std::get<1>(kmer) << " ";
+                    }
+                    last = "";
+                    continue;
+                }               
+            }
+
+            if (std::get<0>(kmer) == 5) { // ~|X
+                continue;
+            }
+
+            if (std::get<1>(kmer) == 5) { // X|~
+                std::cout << std::get<1>(kmer) << std::endl;
+                continue;
+            }
+        }
+        if (last != "") {
+            std::cout << last_token;
+            std::cout << std::endl;
+        }
+    }
 
     void print_queue(std::unordered_map<TokenType, std::string>& alphabet_map, std::unordered_map<size_t, Kmer>& kmer_id2kmer) {
         
@@ -306,34 +440,61 @@ public:
         }
     }
 
-    bool removeAtIndex(size_t index) {
+    bool removeAtIndex(size_t index, std::unordered_map<Kmer, size_t, TupleHash>& kmer2kmer_id, std::unordered_map<size_t, Kmer>& kmer_id2kmer, std::unordered_map<TokenType, std::string>& alphabet_map) {
         size_t kmer_id = array_of_tokens[index];
         array_of_tokens[index] = 0;
         if (index == array_of_prevs[index]) {
             /// START A|B ...
             array_of_prevs[array_of_nexts[index]] = array_of_nexts[index];
+            // print_bpe_to_stdout(alphabet_map, kmer_id2kmer);
         } else if (container_size_ == array_of_nexts[index]) {
             /// ...   A|B END
             array_of_nexts[array_of_prevs[index]] = container_size_;
+            // print_bpe_to_stdout(alphabet_map, kmer_id2kmer);
         } else {
             /// ... A|B ...
+            // std::cout << index << std::endl;
+            // std::cout << array_of_prevs[index] << std::endl;
+            // std::cout << array_of_nexts[array_of_prevs[index]] << std::endl;
+            // std::cout << array_of_nexts[index] << std::endl;
             array_of_nexts[array_of_prevs[index]] = array_of_nexts[index];
+            // print_raw_bpe_to_stdout(alphabet_map, kmer_id2kmer);
             array_of_prevs[array_of_nexts[index]] = array_of_prevs[index];
+            // print_raw_bpe_to_stdout(alphabet_map, kmer_id2kmer);
         }
         counter.decrease(kmer_id);
         size_--;
         return true;
     }
 
+    void init_new_kmer(Kmer kmer, char is_help_token, std::unordered_map<Kmer, size_t, TupleHash>& kmer2kmer_id, std::unordered_map<size_t, Kmer>& kmer_id2kmer) {
+        if (kmer2kmer_id.find(kmer) == kmer2kmer_id.end()) {
+            kmer2kmer_id[kmer] = kmer2kmer_id.size();
+            kmer_id2kmer[kmer_id2kmer.size()] = kmer;
+            counter.set_token(kmer2kmer_id[kmer], is_help_token);
+            counter.init_positions(kmer2kmer_id[kmer], 1000);
+        }
+    }
+
 
     void collapse(size_t kmer_id, TokenType L, std::unordered_map<Kmer, size_t, TupleHash>& kmer2kmer_id, std::unordered_map<size_t, Kmer>& kmer_id2kmer, std::unordered_map<TokenType, std::string>& alphabet_map) {
-    
-        // counter.print_counts();
+        // We have:
+        //     kmer_id: kmer_id
+        //     kmer2kmer_id: kmer -> kmer_id
+        //     kmer_id2kmer: kmer_id -> kmer
+        //     alphabet_map: TokenType -> std::string
 
-        std::unordered_set<size_t> touched_kmers;
-        PositionsContainer& positions = counter.get_positions(kmer_id);
+        std::unordered_set<size_t> touched_kmers; // kmers that were touched during the collapse and should be updated
+        PositionsContainer& positions = counter.get_positions(kmer_id); // we have precomputed positions for kmer_id
+
+        
 
         for (size_t i = 0; i < positions.size(); i++) {
+
+            // for (size_t j=0; j < container_size_; j++) {
+            //     std::cout << j << " " << array_of_prevs[j] << " " << array_of_tokens[j] << " " << array_of_nexts[j] << std::endl;
+            // }
+
             if (positions.get_plus_one_position(i) == 0) {
                 continue;
             }
@@ -341,87 +502,75 @@ public:
                 std::cout << "Processed " << i << " positions." << std::endl;
             }
             size_t index = positions.get_plus_one_position(i);
+
             if (index > 0 && kmer_id == array_of_tokens[index-1]) {
+                
                 index -= 1;
                 
-
-                size_t prev_index = array_of_prevs[index]; 
+                size_t prev_index = array_of_prevs[index];
+                size_t next_index = array_of_nexts[index];
 
                 size_t prev_kmer_id = array_of_tokens[prev_index];
-                char is_helper = counter.is_helper_kmer(prev_kmer_id);
+                char is_prev_helper = counter.is_helper_kmer(prev_kmer_id);
 
-                if (index != array_of_prevs[index] && !is_helper) {
+
+                if (index != array_of_prevs[index] && !is_prev_helper) {
                     
-                    // new kmer
                     Kmer prevKmer = kmer_id2kmer[prev_kmer_id];
                     Kmer left_kmer = std::make_tuple(std::get<0>(prevKmer), L);
-                    if (kmer2kmer_id.find(left_kmer) == kmer2kmer_id.end()) {
-                        kmer2kmer_id[left_kmer] = kmer2kmer_id.size();
-                        kmer_id2kmer[kmer_id2kmer.size()] = left_kmer;
-                        counter.set_token(kmer2kmer_id[left_kmer], 0);
-                        counter.init_positions(kmer2kmer_id[left_kmer], 1000);
-                    }
+                    init_new_kmer(left_kmer, is_prev_helper, kmer2kmer_id, kmer_id2kmer);
                     size_t left_kmer_id = kmer2kmer_id[left_kmer];
                     counter.decrease(prev_kmer_id);
                     counter.increase(left_kmer_id);
                     
                     counter.add_position(left_kmer_id, prev_index);       
                     array_of_tokens[prev_index] = left_kmer_id;
-
                     touched_kmers.insert(prev_kmer_id);
                     touched_kmers.insert(left_kmer_id);
                 }
 
-                size_t next_index = array_of_nexts[index];
-                
-                
                 if (container_size_ != array_of_nexts[index]) {
                     size_t next_kmer_id = array_of_tokens[next_index];
-                    char is_helper_R = counter.is_helper_kmer(next_kmer_id);
+                    char is_next_helper = counter.is_helper_kmer(next_kmer_id);
+                    
+                    
 
-                     if (!is_helper_R) {
-
+                    Kmer next_kmer = kmer_id2kmer[next_kmer_id];
+                    Kmer right_kmer = std::make_tuple(L, std::get<1>(next_kmer));                    
+                    
+                    init_new_kmer(right_kmer, is_next_helper, kmer2kmer_id, kmer_id2kmer);
                         
+                    size_t right_kmer_id = kmer2kmer_id[right_kmer];
 
-                        Kmer next_kmer = kmer_id2kmer[next_kmer_id];
-                        Kmer right_kmer = std::make_tuple(L, std::get<1>(next_kmer));
-                        if (kmer2kmer_id.find(right_kmer) == kmer2kmer_id.end()) {
-                            kmer2kmer_id[right_kmer] = kmer2kmer_id.size();
-                            kmer_id2kmer[kmer_id2kmer.size()] = right_kmer;
-                            counter.set_token(kmer2kmer_id[right_kmer], 0);
-                            counter.init_positions(kmer2kmer_id[right_kmer], 1000);
-                        }
-                        size_t right_kmer_id = kmer2kmer_id[right_kmer];
-
-                        counter.decrease(next_kmer_id);
-                        counter.increase(right_kmer_id);
+                    counter.decrease(next_kmer_id);
+                    counter.increase(right_kmer_id);
                         
-                        counter.add_position(right_kmer_id, next_index); 
+                    counter.add_position(right_kmer_id, next_index); 
                 
-                        array_of_tokens[next_index] = right_kmer_id;
+                    array_of_tokens[next_index] = right_kmer_id;
 
-                        touched_kmers.insert(next_kmer_id);
-                        touched_kmers.insert(right_kmer_id);
-                    }
+                    touched_kmers.insert(next_kmer_id);
+                    touched_kmers.insert(right_kmer_id);
+                    
                 }
 
-                removeAtIndex(index);
+                // for (size_t j=0; j < container_size_; j++) {
+                //     std::cout << j << " " << array_of_prevs[j] << " " << array_of_tokens[j] << " " << array_of_nexts[j] << std::endl;
+                // }
+                
+                // print_bpe_to_stdout(alphabet_map, kmer_id2kmer);
+                // print_raw_bpe_to_stdout(alphabet_map, kmer_id2kmer);
+                removeAtIndex(index, kmer2kmer_id, kmer_id2kmer, alphabet_map);
+                // print_raw_bpe_to_stdout(alphabet_map, kmer_id2kmer);
+                // print_bpe_to_stdout(alphabet_map, kmer_id2kmer);
 
                 touched_kmers.insert(kmer_id);                
 
             }
         }
 
-        
-        
-
         for (const auto& kmer_id : touched_kmers) {
             if (counter.get(kmer_id) > 0 && !counter.is_helper_kmer(kmer_id)) {
-
-                // print kmer id freq and alphabet_map
-                // Kmer kmer = kmer_id2kmer[kmer_id];
-                // std::cout << "Kmer: " << alphabet_map[std::get<0>(kmer)] << alphabet_map[std::get<1>(kmer)] << " " << kmer_id << " " << counter.get(kmer_id) << std::endl;
-
                 max_heap.push(std::make_pair(counter.get(kmer_id), kmer_id));
             } else {
                 if (!counter.is_helper_kmer(kmer_id)) {
@@ -492,7 +641,6 @@ private:
             return a.second > b.second; // Sort by kmer_id in ascending order in case of a tie
         }
     };
-
 
     size_t container_size_ = 0;
     size_t* array_of_tokens = nullptr;

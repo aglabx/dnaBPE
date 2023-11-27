@@ -4,41 +4,46 @@
 #include <string>
 #include <vector>
 #include <sstream>
+#include <unordered_map>
+#include <iostream>
+
 #include "tokens.hpp"
 
 
-std::string get_dataset(const std::vector<std::string>& seqs) {
-    std::stringstream ss;
-    bool first = true;
+std::vector<TokenType> get_dataset(const std::vector<std::string>& seqs, const std::unordered_map<std::string, TokenType>& alphabet) {
+
+    size_t N = 0;
     for (auto& s : seqs) {
-        if (!first) {
-            ss << "~";
-        }
-        first = false;
-        ss << s;
-    }
-    return ss.str();
-}
-
-// in our case maximal tokens for std::uint16_t is 65535
-std::vector<TokenType> convert_to_vector(const std::string& dataset, const std::unordered_map<std::string, TokenType>& alphabet) {
+        N += s.size();
+    } 
+    N += seqs.size() - 1; // for ~
     std::vector<TokenType> seq;
-    seq.reserve(dataset.size()); // Reserve space
-
-    std::string temp(1, '\0'); // Temporary string for lookup
-    for (auto x : dataset) {
-        if (x == '\n') {
-            x = '~';
+    seq.reserve(N); // Reserve space
+    std::string temp(1, '\0');
+    size_t i = 0;
+    for (auto& s : seqs) {
+        for (auto x : s) {
+            if (x == '\n') {
+                x = '~';
+            }
+            temp[0] = x;
+            auto it = alphabet.find(temp);
+            if (it != alphabet.end()) {
+                seq.emplace_back(it->second);
+            } else {
+                seq.emplace_back(alphabet.at("[UNK]"));
+            }
+            if (i && i % 100000000 == 0) {
+                std::cout << " ... " << i << "/" << N << std::endl;
+            }
+            ++i;
         }
-        temp[0] = x;
+        temp[0] = '~';
         auto it = alphabet.find(temp);
-        if (it != alphabet.end()) {
-            seq.emplace_back(it->second);
-        } else {
-            seq.emplace_back(alphabet.at("[UNK]"));
-        }
+        seq.emplace_back(it->second);
     }
     return seq;
+
 }
 
 #endif

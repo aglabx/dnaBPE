@@ -3,7 +3,6 @@
 
 #include <tuple>
 #include <vector>
-#include "tokens.hpp"
 #include <unordered_map>
 #include <iostream>
 #include <unordered_set>
@@ -13,162 +12,14 @@
 #include <mutex>
 #include <cstring>
 #include <atomic>
+#include <cmath>
+#include <algorithm>
 
+#include "tokens.hpp"
+#include "positions.hpp"
 
 // typedef CounterType to uint32_t
 typedef uint32_t CounterType;
-
-class PositionsContainer {
-public:
-
-    PositionsContainer() {
-        max_size_ = 100;
-        positions = nullptr;
-        size_ = 0;   
-    }
-
-    PositionsContainer(size_t size) {
-        
-        positions = new size_t[size];
-        for (size_t i = 0; i < size; i++) {
-            positions[i] = 0;
-        }
-        size_ = 0;
-        max_size_ = size;
-    }
-
-    // the copy constructor
-    PositionsContainer(const PositionsContainer& other)
-    : max_size_(other.max_size_) {
-        size_.store(other.size_.load());
-        positions = new size_t[max_size_];
-        for (size_t i = 0; i < max_size_; i++) {
-            positions[i] = other.positions[i];
-        }
-    }
-    
-    // the copy assignment operator
-    PositionsContainer& operator=(const PositionsContainer& other) {
-    if (this != &other) {
-        // Free the existing memory if necessary
-        if (positions != nullptr) {
-            delete[] positions;
-        }
-
-        // Copy the size and max_size values
-        size_.store(other.size_.load());
-        max_size_ = other.max_size_;
-
-        // Allocate new memory for positions and copy the elements from the other object
-        positions = new size_t[max_size_];
-        for (size_t i = 0; i < max_size_; i++) {
-            positions[i] = other.positions[i];
-        }
-    }
-    return *this;
-}
-
-    // Move constructor
-    PositionsContainer(PositionsContainer&& other) noexcept
-        : positions(other.positions), max_size_(other.max_size_) {
-        size_.store(other.size_.load());
-        // Nullify the pointers in the other object to avoid double deletion
-        other.positions = nullptr;
-        other.size_ = 0;
-        other.max_size_ = 0;
-    }
-
-    // Move assignment operator
-    PositionsContainer& operator=(PositionsContainer&& other) noexcept {
-        if (this != &other) {
-            if (positions != nullptr) delete[] positions;
-
-            positions = other.positions;
-            size_.store(other.size_.load());
-            max_size_ = other.max_size_;
-
-            other.positions = nullptr;
-            other.size_ = 0;
-            other.max_size_ = 0;
-        }
-        return *this;
-    }
-
-
-    ~PositionsContainer() {
-        if (positions != nullptr) {
-            delete[] positions;
-        }
-    }
-
-    void set(size_t index) {
-        if (size_.load() >= max_size_) {
-            extend_counts();
-        }
-        positions[size_.fetch_add(1)] = index + 1;
-    }
-
-    size_t get(size_t index) {
-        if (index >= size_) {
-            std::cout << "index >= size_" << std::endl;
-            exit(1);
-        }
-        return positions[index] - 1;
-    }
-
-    size_t get_plus_one_position(size_t index) {
-        if (index >= size_) {
-            std::cout << "index >= size_" << std::endl;
-            exit(1);
-        }
-        return positions[index];
-    }
-
-    void clear() {
-        if (positions != nullptr) {
-            delete[] positions;
-            positions = nullptr;
-        }
-    }
-    u_int64_t size() const {
-        return size_.load();
-    }
-
-    void extend_counts() {
-        size_t* new_positions = new size_t[max_size_ * 2];
-        for (size_t i = 0; i < max_size_; i++) {
-            new_positions[i] = positions[i];
-        }
-        for (size_t i = max_size_; i < max_size_ * 2; i++) {
-            new_positions[i] = 0;
-        }
-        delete[] positions;
-        positions = new_positions;
-        max_size_ *= 2;
-    }
-
-    void diagnostic_print_of_state() {
-        // print all variables
-        std::cout << "POSITIONS" << std::endl;
-        std::cout << "size_: " << size_ << std::endl;
-        std::cout << "max_size_: " << max_size_ << std::endl;
-        std::cout << "positions: " << std::endl;
-        if (positions == nullptr) {
-            std::cout << "nullptr" << std::endl;
-            return;
-        }
-        for (size_t i = 0; i < size_; i++) {
-            std::cout << positions[i] << " ";
-        }
-        std::cout << std::endl;
-    }
-
-private:
-    size_t* positions = nullptr;
-    std::atomic<u_int64_t> size_ = 0;
-    size_t max_size_ = 1000;
-};
-
 
 class CounterContainer {
 public:
@@ -273,6 +124,10 @@ public:
             std::cout << "kmer_id >= max_size" << std::endl;
             exit(1);
         }
+        size_.store(std::max((size_t)size_.load(), kmer_id + 1));
+        if (size_ >= max_size) {
+            extend_counts();
+        }
         if (positions[kmer_id] == nullptr) {
             positions[kmer_id] = new PositionsContainer(tf);
             return;
@@ -285,11 +140,6 @@ public:
             exit(1);
         }
         flags[kmer_id] = is_help_token;
-        ++size_;
-        if (size_ == max_size) {
-            extend_counts();
-        }
-        return;
     }
 
     void decrease(size_t kmer_id) {
@@ -302,7 +152,7 @@ public:
             counts[kmer_id]--;    
             return;
         }
-        std::cout << "overflow counter kmer_id > size_: " << kmer_id << " " << size_ << std::endl;
+        std::cout << "overflow counter in decrease kmer_id > size_: " << kmer_id << " " << size_ << std::endl;
     }
 
     void increase(size_t kmer_id) {
@@ -314,7 +164,7 @@ public:
             counts[kmer_id]++;
             return;
         }
-        std::cout << "overflow counter kmer_id > size_: " << kmer_id << " " << size_ << std::endl;
+        std::cout << "overflow counter in increase kmer_id > size_: " << kmer_id << " " << size_ << std::endl;
     }
 
     bool is_helper_kmer(size_t kmer_id) {
@@ -340,7 +190,7 @@ public:
             positions[kmer_id]->clear();
             return;
         }
-        std::cout << "overflow counter kmer_id > size_: " << kmer_id << " " << size_ << std::endl;
+        std::cout << "overflow counter remove kmer_id > size_: " << kmer_id << " " << size_ << std::endl;
     }
 
     CounterType get(size_t kmer_id) {
@@ -379,11 +229,13 @@ public:
         }
     }
 
+
     void extend_counts() {
-        std::cout << "extend_counts to " << max_size * 2 << std::endl;
-        std::atomic<CounterType>* new_counts = new std::atomic<CounterType>[max_size * 2];
-        char* new_flags = new char[max_size * 2];
-        PositionsContainer** new_positions = new PositionsContainer*[max_size * 2];
+        size_t new_size = max_size + increment;
+        std::cout << "extend_counts to " << new_size << std::endl;
+        std::atomic<CounterType>* new_counts = new std::atomic<CounterType>[new_size];
+        char* new_flags = new char[new_size];
+        PositionsContainer** new_positions = new PositionsContainer*[new_size];
         for (size_t i = 0; i < max_size; i++) {
             new_flags[i] = flags[i];
             new_positions[i] = positions[i];
@@ -392,12 +244,12 @@ public:
             new_counts[i].store(counts[i].load());
         }
 
-        for (size_t i = max_size; i < max_size * 2; i++) {
+        for (size_t i = max_size; i < new_size; i++) {
             new_counts[i] = 0;
             new_flags[i] = 0;
             new_positions[i] = nullptr;
         }
-        for (CounterType i = max_size; i < max_size * 2; i++) {
+        for (CounterType i = max_size; i < new_size; i++) {
             new_counts[i] = 0;
         }
         delete[] counts;
@@ -406,7 +258,7 @@ public:
         counts = new_counts;
         flags = new_flags;
         positions = new_positions;
-        max_size *= 2;
+        max_size = new_size;
     }
 
     void diagnostic_print_of_state() {
@@ -438,7 +290,8 @@ private:
     PositionsContainer** positions;
     char* flags;
     std::atomic<u_int64_t> size_ = 0;
-    size_t max_size = 402653184; // 3Gb of space
+    size_t max_size = 40265318; // 3Gb of space
+    const size_t increment = 12653184;
     // size_t max_size = 20; // 3Gb of space
 };
 

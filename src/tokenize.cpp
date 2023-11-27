@@ -14,7 +14,7 @@
 #include "core.hpp"
 #include "output.hpp"
 #include "container.hpp"
-#include <filesystem> // Include this at the top of your file
+
 
 
 std::vector<TokenType> get_data(std::string& file_name, std::string& format, const std::unordered_map<std::string, TokenType>& alphabet) {
@@ -41,33 +41,20 @@ std::vector<TokenType> get_data(std::string& file_name, std::string& format, con
 int main(int argc, char* argv[]) {
 
     if (argc != 6) {
-        std::cerr << "Usage: " << argv[0] << " <input_file> <output_file_prefix> <format: reads, fasta, trf, fastq, bpe> <max_tokens> <threads>" << std::endl;
+        std::cerr << "Usage: " << argv[0] << " <input_file> <bpe_pos_file> <output_file_prefix> <format: reads, fasta, trf, fastq, bpe> <max_tokens> <threads>" << std::endl;
         return 1;
     }
 
     std::string file_name = argv[1];
-    std::string output_prefix = argv[2];
-    std::string format = argv[3];
-    size_t max_tokens = std::stoul(argv[4]);
-    size_t n_threads = std::stoul(argv[5]);
-    std::string n_tokens_suffix = argv[4];
-    const std::set<size_t> snapshot_points = {
-        // 512,
-        // 1024,
-        // 2048,
-        // 4096,
-        // 8192,
-        // 16384,
-        // 32768,
-    };
-
+    std::string bpe_pos_name = argv[2];
+    std::string output_prefix = argv[3];
+    std::string format = argv[4];
+    size_t max_tokens = std::stoul(argv[5]);
+    size_t n_threads = std::stoul(argv[6]);
+    std::string n_tokens_suffix = argv[7];
+    
     if (max_tokens > MAX_N_TOKENS) {
-        std::cout << "Max tokens must be less than " << MAX_N_TOKENS << std::endl;
-        return 1;
-    }
-
-    if (!std::filesystem::exists(file_name)) {
-        std::cout << "File " << file_name << " does not exist" << std::endl;
+        std::cout << "Max tokens must be less than 65535" << std::endl;
         return 1;
     }
     
@@ -80,7 +67,6 @@ int main(int argc, char* argv[]) {
     // set zero for start to mark collapsed nodes
     kmer2kmer_id[std::make_tuple(0, 0)] = 0;
     kmer_id2kmer[0] = std::make_tuple(0, 0);
-
     TokenType L = alphabet.size();
 
     std::unordered_map<TokenType, size_t> tokens;
@@ -114,11 +100,6 @@ int main(int argc, char* argv[]) {
     size_t tf;
     
     while (true) {
-
-        // std::cout << "Priority queue: ";
-        // container.print_queue(alphabet_map, kmer_id2kmer);
-        // container.display(alphabet_map, kmer_id2kmer);
-
 
         std::tie(rep, tf) = container.get_most_frequent_pair();
 
@@ -156,34 +137,17 @@ int main(int argc, char* argv[]) {
             start_time = std::chrono::high_resolution_clock::now();
         } 
 
-        // container.print_bpe_to_stdout(alphabet_map, kmer_id2kmer);
         container.collapse(rep, L, kmer2kmer_id, kmer_id2kmer, alphabet_map);
-        // container.print_bpe_to_stdout(alphabet_map, kmer_id2kmer);
         
 
         L += 1;
-
-        // std::cout << " new size: " << seq.size() << std::endl;
-
-        // if (snapshot_points.find(L) != snapshot_points.end()) {
-        //     save_snapshot(tokens, merged, kmer2kmer_id, rev_tokens, seq, alphabet_map, alphabet_tf_map, output_prefix, std::to_string(L), false);
-        // }
-
-        
-
-        // container.print_counter(alphabet_map);
-
-        // std::cout << "Continue?";
-        // std::cin >> status;
     }
 
 
     std::vector<TokenType> raw_seq = container.get_as_vector(kmer_id2kmer);
-    
     save_snapshot(tokens, merged, kmer2kmer_id, rev_tokens, raw_seq, alphabet_map, alphabet_tf_map, output_prefix, std::to_string(L), true);
     
-    // container.diagnostic_print_of_state();
-
+    
     std::string output_bpe_encoding_file = output_prefix + "." + std::to_string(L) + ".bpe";
     std::string output_bpe_raw_encoding_file = output_prefix + "." + std::to_string(L) + ".raw.bpe";
     container.save_bpe_to_file(output_bpe_encoding_file, output_bpe_raw_encoding_file, alphabet_map, kmer_id2kmer);
