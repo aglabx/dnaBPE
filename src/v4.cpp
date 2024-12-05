@@ -16,6 +16,10 @@
 using json = nlohmann::json;
 using ordered_json = nlohmann::ordered_json;
 
+// Forward declarations and token frequencies management
+class DNABPETokenizer;
+class VectorLinkedList;
+
 namespace TokenizerConstants {
     static constexpr size_t BASE_VOCAB_SIZE = 5;
     static constexpr std::array<const char*, BASE_VOCAB_SIZE> BASE_VOCAB = {
@@ -37,6 +41,127 @@ namespace TokenizerConstants {
             default: return SEP_TOKEN_ID;
         }
     }
+}
+
+// Add after TokenizerConstants namespace and before VectorNode
+
+class PairPriorityQueue {
+private:
+    struct PairInfo {
+        uint32_t left;
+        uint32_t right;
+        size_t frequency;
+        
+        PairInfo(uint32_t l, uint32_t r, size_t f) 
+            : left(l), right(r), frequency(f) {}
+            
+        bool operator<(const PairInfo& other) const {
+            // Reverse comparison for max heap
+            return frequency < other.frequency;
+        }
+    };
+    
+    std::priority_queue<PairInfo> heap;
+    std::unordered_map<uint64_t, size_t> pair_frequencies;
+    
+    static uint64_t make_key(uint32_t left, uint32_t right) {
+        return (static_cast<uint64_t>(left) << 32) | right;
+    }
+    
+    void rebuild_heap() {
+        std::priority_queue<PairInfo> new_heap;
+        for (const auto& [key, freq] : pair_frequencies) {
+            if (freq >= 2) {
+                uint32_t left = key >> 32;
+                uint32_t right = key & 0xFFFFFFFF;
+                new_heap.emplace(left, right, freq);
+            }
+        }
+        heap = std::move(new_heap);
+    }
+
+public:
+    void add_pair(uint32_t left, uint32_t right, size_t initial_freq = 1) {
+        uint64_t key = make_key(left, right);
+        pair_frequencies[key] += initial_freq;
+        if (pair_frequencies[key] >= 2) {
+            heap.emplace(left, right, pair_frequencies[key]);
+        }
+    }
+    
+    void increase_frequency(uint32_t left, uint32_t right) {
+        uint64_t key = make_key(left, right);
+        size_t new_freq = ++pair_frequencies[key];
+        if (new_freq == 2) {
+            heap.emplace(left, right, new_freq);
+        }
+    }
+    
+    void decrease_frequency(uint32_t left, uint32_t right) {
+        uint64_t key = make_key(left, right);
+        if (pair_frequencies.count(key)) {
+            if (--pair_frequencies[key] < 2) {
+                pair_frequencies.erase(key);
+                rebuild_heap();  // Rebuild heap when a pair becomes invalid
+            }
+        }
+    }
+    
+    bool get_most_frequent(uint32_t& left, uint32_t& right, size_t& freq) {
+        while (!heap.empty()) {
+            const PairInfo& top = heap.top();
+            uint64_t key = make_key(top.left, top.right);
+            
+            // Check if the frequency is still valid
+            if (pair_frequencies.count(key) && 
+                pair_frequencies[key] == top.frequency && 
+                pair_frequencies[key] >= 2) {
+                left = top.left;
+                right = top.right;
+                freq = top.frequency;
+                return true;
+            }
+            
+            heap.pop();  // Remove outdated entry
+        }
+        return false;
+    }
+    
+    void clear() {
+        while (!heap.empty()) heap.pop();
+        pair_frequencies.clear();
+    }
+    
+    bool empty() const {
+        return heap.empty();
+    }
+    
+    size_t get_frequency(uint32_t left, uint32_t right) const {
+        uint64_t key = make_key(left, right);
+        auto it = pair_frequencies.find(key);
+        return it != pair_frequencies.end() ? it->second : 0;
+    }
+};
+
+// Global token frequencies management
+std::vector<size_t> global_token_frequencies;
+
+void init_token_frequencies(size_t max_size) {
+    global_token_frequencies.clear();
+    global_token_frequencies.reserve(max_size);
+    // Initialize with zeros for base vocabulary
+    global_token_frequencies.resize(TokenizerConstants::BASE_VOCAB_SIZE, 0);
+}
+
+void increase_token_frequency(uint32_t token_id) {
+    if (token_id >= global_token_frequencies.size()) {
+        global_token_frequencies.resize(token_id + 1, 0);
+    }
+    global_token_frequencies[token_id]++;
+}
+
+size_t get_token_frequency(uint32_t token_id) {
+    return token_id < global_token_frequencies.size() ? global_token_frequencies[token_id] : 0;
 }
 
 // Add new structures at the top of the file
@@ -162,6 +287,7 @@ public:
     }
 };
 
+// First, define SequenceReader class (move it before DNABPETokenizer)
 class SequenceReader {
 private:
     std::ifstream file;
@@ -225,17 +351,23 @@ public:
 
             for (std::streamsize i = 0; i < bytes_read; ++i) {
                 char c = buffer[i];
+                uint32_t token_id;
                 if (c == '\n') {
                     if (!first_sequence) {
-                        temp_nodes.emplace_back(TokenizerConstants::SEP_TOKEN_ID);
+                        token_id = TokenizerConstants::char_to_token_id(TokenizerConstants::SEP_TOKEN_ID);
+                        temp_nodes.emplace_back(token_id);
+                        increase_token_frequency(token_id);  // Use global function
                     }
                     first_sequence = false;
                 } else if (c != '\r') { // Skip carriage returns
                     if (TokenizerConstants::is_nucleotide(c)) {
-                        temp_nodes.emplace_back(TokenizerConstants::char_to_token_id(c));
+                        token_id = TokenizerConstants::char_to_token_id(c);
+                        temp_nodes.emplace_back(token_id);
                     } else {
-                        temp_nodes.emplace_back(TokenizerConstants::SEP_TOKEN_ID);
+                        token_id = TokenizerConstants::char_to_token_id(TokenizerConstants::SEP_TOKEN_ID);
+                        temp_nodes.emplace_back(token_id);
                     }
+                    increase_token_frequency(token_id);  // Use global function
                 }
             }
 
@@ -271,6 +403,7 @@ public:
     }
 };
 
+// Move DNABPETokenizer class before SequenceReader
 class DNABPETokenizer {
 private:
     // Базовый словарь как статические константы класса
@@ -318,9 +451,10 @@ private:
     std::vector<std::string> vocab_strings;  // индекс это id токена, значение - строка
     std::unordered_map<std::string, uint32_t> vocab;  // строка -> id токена
     std::vector<std::pair<uint32_t, uint32_t>> merges;  // пары id токенов для мерджей
-    std::vector<size_t> token_frequencies;  // частоты по id токена
     VectorLinkedList current_sequence;  // Заменяем vector<VectorLinkedList> на один список
     const int max_vocab_size;
+
+    
 
     void count_pairs(std::unordered_map<IntPair, size_t, IntPairHash>& frequencies) {
         for (auto it = current_sequence.begin(); it != current_sequence.end(); ++it) {
@@ -369,17 +503,21 @@ private:
     }
 
 public:
+
+    
+
     DNABPETokenizer(int max_size = 1000) : max_vocab_size(max_size) {
         // Инициализация базового словаря
         vocab_strings.reserve(max_size);
-        token_frequencies.reserve(max_size);
+        init_token_frequencies(max_size);  // Initialize global frequencies
         
         for (size_t i = 0; i < BASE_VOCAB_SIZE; ++i) {
             vocab_strings.push_back(BASE_VOCAB[i]);
             vocab[BASE_VOCAB[i]] = i;
-            token_frequencies.push_back(0);
         }
     }
+
+    
 
     // Публичные методы для внешнего доступа к базовому словарю
     static bool is_valid_token(char c) { return is_nucleotide(c); }
@@ -408,7 +546,7 @@ public:
             uint32_t new_id = vocab_strings.size();
             vocab_strings.push_back(new_token);
             vocab[new_token] = new_id;
-            token_frequencies.push_back(most_frequent->second);
+            increase_token_frequency(new_id);  // Use global function
             merges.push_back({most_frequent->first.first, most_frequent->first.second});
 
             apply_merge_to_list(current_sequence, most_frequent->first, new_id);
@@ -464,7 +602,7 @@ public:
     const auto& get_vocab() const { return vocab; }
     const auto& get_merges() const { return merges; }
     size_t get_token_frequency(uint32_t token_id) const { 
-        return token_frequencies[token_id];
+        return ::get_token_frequency(token_id);  // Use global function
     }
     int get_vocab_size() const { return vocab_strings.size(); }
     
