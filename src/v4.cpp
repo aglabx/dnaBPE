@@ -168,21 +168,23 @@ size_t get_token_frequency(uint32_t token_id) {
 struct VectorNode {
     uint32_t token_id;
     uint32_t next_idx;
+    uint32_t prev_idx;  // Add prev_idx for doubly linked list
     
-    VectorNode(uint32_t id = 0, uint32_t next = UINT32_MAX) 
-        : token_id(id), next_idx(next) {}
+    VectorNode(uint32_t id = 0, uint32_t next = UINT32_MAX, uint32_t prev = UINT32_MAX) 
+        : token_id(id), next_idx(next), prev_idx(prev) {}
 };
 
 class VectorLinkedList {
 private:
     std::vector<VectorNode> nodes;
     uint32_t head_idx;
+    uint32_t tail_idx;  // Add tail_idx for faster operations
     uint32_t size_;
 
 public:
     static constexpr uint32_t END_MARKER = UINT32_MAX;
     
-    VectorLinkedList() : head_idx(END_MARKER), size_(0) {}
+    VectorLinkedList() : head_idx(END_MARKER), tail_idx(END_MARKER), size_(0) {}
     
     void init(size_t capacity) {
         nodes.reserve(capacity);
@@ -190,8 +192,14 @@ public:
     
     uint32_t push_front(uint32_t token_id) {
         uint32_t new_idx = nodes.size();
-        nodes.emplace_back(token_id, head_idx);
-        head_idx = new_idx;
+        if (head_idx == END_MARKER) {
+            nodes.emplace_back(token_id, END_MARKER, END_MARKER);
+            head_idx = tail_idx = new_idx;
+        } else {
+            nodes.emplace_back(token_id, head_idx, END_MARKER);
+            nodes[head_idx].prev_idx = new_idx;
+            head_idx = new_idx;
+        }
         size_++;
         return new_idx;
     }
@@ -202,14 +210,10 @@ public:
             return;
         }
         
-        uint32_t current = head_idx;
-        while (nodes[current].next_idx != END_MARKER) {
-            current = nodes[current].next_idx;
-        }
-        
         uint32_t new_idx = nodes.size();
-        nodes.emplace_back(token_id, END_MARKER);
-        nodes[current].next_idx = new_idx;
+        nodes.emplace_back(token_id, END_MARKER, tail_idx);
+        nodes[tail_idx].next_idx = new_idx;
+        tail_idx = new_idx;
         size_++;
     }
     
@@ -222,8 +226,27 @@ public:
         }
         
         uint32_t second_idx = nodes[first_idx].next_idx;
+        uint32_t next_idx = nodes[second_idx].next_idx;
+        uint32_t prev_idx = nodes[first_idx].prev_idx;  // Store prev_idx of first node
+
+        // Update token and links
         nodes[first_idx].token_id = new_token_id;
-        nodes[first_idx].next_idx = nodes[second_idx].next_idx;
+        nodes[first_idx].next_idx = next_idx;
+        
+        // Update next node's prev link
+        if (next_idx != END_MARKER) {
+            nodes[next_idx].prev_idx = first_idx;
+        } else {
+            tail_idx = first_idx;
+        }
+
+        // Update prev node's next link if it exists
+        if (prev_idx != END_MARKER) {
+            nodes[prev_idx].next_idx = first_idx;
+        } else {
+            head_idx = first_idx;
+        }
+        
         size_--;
         return true;
     }
@@ -269,21 +292,87 @@ public:
         
         if (head_idx == END_MARKER) {
             head_idx = old_size;
+            tail_idx = nodes.size() - 1;
         } else {
-            // Find last node and link it
-            uint32_t current = head_idx;
-            while (nodes[current].next_idx != END_MARKER) {
-                current = nodes[current].next_idx;
-            }
-            nodes[current].next_idx = old_size;
+            nodes[old_size].prev_idx = tail_idx;
+            nodes[tail_idx].next_idx = old_size;
         }
         
-        // Link new nodes
+        // Update links for new nodes
         for (size_t i = old_size; i < nodes.size() - 1; ++i) {
             nodes[i].next_idx = i + 1;
+            nodes[i + 1].prev_idx = i;
         }
+        
         nodes.back().next_idx = END_MARKER;
+        tail_idx = nodes.size() - 1;
         size_ += new_nodes.size();
+    }
+
+    // Add methods for getting neighboring tokens
+    uint32_t get_prev_token(uint32_t idx) const {
+        if (idx >= nodes.size() || nodes[idx].prev_idx == END_MARKER) {
+            return TokenizerConstants::SEP_TOKEN_ID;
+        }
+        return nodes[nodes[idx].prev_idx].token_id;
+    }
+
+    uint32_t get_next_token(uint32_t idx) const {
+        if (idx >= nodes.size() || nodes[idx].next_idx == END_MARKER) {
+            return TokenizerConstants::SEP_TOKEN_ID;
+        }
+        return nodes[nodes[idx].next_idx].token_id;
+    }
+
+    // Reverse iterator support needs to be added
+    class ReverseIterator {
+    private:
+        const VectorLinkedList* list;
+        uint32_t current_idx;
+        
+    public:
+        ReverseIterator(const VectorLinkedList* l, uint32_t start) 
+            : list(l), current_idx(start) {}
+        
+        bool operator!=(const ReverseIterator& other) const {
+            return current_idx != other.current_idx;
+        }
+        
+        ReverseIterator& operator++() {
+            if (current_idx != END_MARKER) {
+                current_idx = list->nodes[current_idx].prev_idx;
+            }
+            return *this;
+        }
+        
+        const VectorNode& operator*() const {
+            return list->nodes[current_idx];
+        }
+    };
+
+    ReverseIterator rbegin() const { return ReverseIterator(this, tail_idx); }
+    ReverseIterator rend() const { return ReverseIterator(this, END_MARKER); }
+
+    // Additional helper method for debug/validation
+    bool validate_links() const {
+        if (size_ == 0) {
+            return head_idx == END_MARKER && tail_idx == END_MARKER;
+        }
+
+        // Check forward links
+        uint32_t count = 0;
+        uint32_t current = head_idx;
+        uint32_t prev = END_MARKER;
+
+        while (current != END_MARKER) {
+            if (nodes[current].prev_idx != prev) return false;
+            prev = current;
+            current = nodes[current].next_idx;
+            count++;
+        }
+
+        // Verify size and tail
+        return count == size_ && prev == tail_idx;
     }
 };
 
