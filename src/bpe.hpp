@@ -20,6 +20,7 @@
 #include "reader.hpp"
 #include "profiler.hpp"
 #include "global.hpp"
+#include "robin_hood.h"
 
 class DNABPETokenizer {
 private:
@@ -64,7 +65,7 @@ private:
     };
 
     std::vector<std::string> vocab_strings;  // индекс это id токена, значение - строка
-    std::unordered_map<std::string, uint32_t> vocab;  // строка -> id токена
+    robin_hood::unordered_map<std::string, uint32_t> vocab;  // строка -> id токена
     std::vector<std::pair<uint32_t, uint32_t>> merges;  // пары id токенов для мерджей
     VectorLinkedList current_sequence;  // Заменяем vector<VectorLinkedList> на один список
     const int max_vocab_size;
@@ -138,23 +139,6 @@ private:
             pair_queue.decrease_frequency(current_sequence.get_node(next_idx).token_id, next_token);
             // Add new pair (new - next)
             pair_queue.add_pair(new_token_id, next_token);
-        }
-    }
-
-    void apply_merge_to_list(VectorLinkedList& list, const IntPair& merge_pair, uint32_t new_token_id) {
-        uint32_t current = list.get_head();
-        while (current != VectorLinkedList::END_MARKER) {
-            VectorNode& node = list.get_node(current);
-            if (node.next_idx != VectorLinkedList::END_MARKER) {
-                const VectorNode& next = list.get_node(node.next_idx);
-                // Пропускаем мерджи где участвует SEP токен
-                if (node.token_id != 4 && next.token_id != 4 && 
-                    node.token_id == merge_pair.first && 
-                    next.token_id == merge_pair.second) {
-                    list.merge_nodes(current, new_token_id);
-                }
-            }
-            current = node.next_idx;
         }
     }
 

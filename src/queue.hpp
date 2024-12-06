@@ -16,7 +16,7 @@
 #include <condition_variable>
 #include <fstream>
 #include <unordered_set>
-
+#include "robin_hood.h"
 
 // Add this right after includes, before any other code
 namespace std {
@@ -48,7 +48,7 @@ private:
     };
     
     std::priority_queue<PairInfo> heap;
-    std::unordered_map<uint64_t, size_t> pair_frequencies;
+    robin_hood::unordered_flat_map<uint64_t, size_t> pair_frequencies;  // Changed to robin_hood map
     size_t invalid_entries = 0;
     static constexpr size_t REBUILD_THRESHOLD = 1000; // Adjust this value based on your needs
     
@@ -76,7 +76,10 @@ private:
     }
 
 public:
-    PairPriorityQueue() = default;
+    PairPriorityQueue() {
+        // Pre-allocate space for common case
+        pair_frequencies.reserve(10000);
+    }
 
     void add_pair(uint32_t left, uint32_t right, size_t initial_freq = 1) {
         uint64_t key = make_key(left, right);

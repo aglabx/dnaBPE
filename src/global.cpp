@@ -1,4 +1,5 @@
 #include "global.hpp"
+#include <cstdint>
 
 // Define the global token frequencies vector
 std::vector<size_t> global_token_frequencies;

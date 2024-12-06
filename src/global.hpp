@@ -4,6 +4,7 @@
 #include <array>
 #include <algorithm>
 #include <vector>
+#include <cstdint>
 
 namespace TokenizerConstants {
     static constexpr size_t BASE_VOCAB_SIZE = 5;

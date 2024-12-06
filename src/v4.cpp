@@ -27,7 +27,7 @@ void print_usage() {
     std::cerr << "Input format: one DNA sequence per line\n";
 }
 
-std::unordered_map<std::string, double> ScopedProfiler::timings;
+robin_hood::unordered_flat_map<std::string, double> ScopedProfiler::timings;
 
 int main(int argc, char* argv[]) {
 
