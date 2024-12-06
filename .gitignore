@@ -24,3 +24,5 @@ src/bpe.v3.dSYM/Contents/Resources/Relocations/aarch64/bpe.v3.yml
 ytt.py
 genome.reads
 genome.tokens
+/tests_data
+profile_report.txt
