@@ -1,47 +1,60 @@
 CXX=g++
-CXXFLAGS=-std=c++17 -pthread -static -Wl,--whole-archive -lpthread -Wl,--no-whole-archive -O3 -rdynamic
-CXXFLAGS_DEV=-std=c++17 -pthread -Wall -O1 
-LDFLAGS=-g
-LDLIBS=
+CXXFLAGS=-std=c++17 -pthread -O3 -march=native
+CXXFLAGS_DEBUG=-std=c++17 -pthread -g -O0 -Wall
+CXXFLAGS_PROFILE=-std=c++17 -pthread -g -pg -O2
 
-TARGET=bin/bpe.exe
-TARGET_LONG=bin/bpe.long.exe
-TARGET_DEV=bin/bpe.dev.exe
-TARGET_SLOW=bin/bpe.slow.exe
-TARGET_FAST=bin/bpe.fast.exe
+# Directories
+SRCDIR=src
+BINDIR=bin
 
-SRCS=nlohmann/json.hpp src/tokens.hpp src/tokens_model.hpp src/readers.hpp src/preprocess.hpp src/core.hpp src/output.hpp src/subcontainers.hpp src/container.hpp src/positions.hpp src/bpe.v3.cpp
+# Source files
+COMMON_SRCS=$(SRCDIR)/global.cpp
+SRCS_V4=$(COMMON_SRCS) $(SRCDIR)/v4.cpp
+HEADERS=$(SRCDIR)/global.hpp \
+        $(SRCDIR)/reader.hpp \
+        $(SRCDIR)/queue.hpp \
+        $(SRCDIR)/profiler.hpp \
+        $(SRCDIR)/linkedvector.hpp \
+        $(SRCDIR)/bpe.hpp \
+        $(SRCDIR)/robin_hood.h
 
-SRCS_SLOW=nlohmann/json.hpp src/tokens.hpp src/tokens_model.hpp src/readers.hpp src/preprocess.hpp src/core.hpp src/output.hpp src/subcontainers.hpp src/container.hpp src/positions.hpp src/bpe.v2.cpp
+# Include paths
+INCLUDES=-I. -I$(SRCDIR)
 
-all: $(TARGET) $(TARGET_DEV) #$(TARGET_SLOW)
+# Output files
+TARGET_V4=$(BINDIR)/bpe.v4.exe
+TARGET_DEBUG=$(BINDIR)/bpe.debug.exe
+TARGET_PROFILE=$(BINDIR)/bpe.profile.exe
 
-long: $(TARGET_LONG)
+# Create bin directory if it doesn't exist
+$(shell mkdir -p $(BINDIR))
 
-prod: $(TARGET)
+# Default target
+all: $(TARGET_V4)
 
-dev: $(TARGET_DEV)
+# Debug build
+debug: CXXFLAGS=$(CXXFLAGS_DEBUG)
+debug: $(TARGET_DEBUG)
 
-# slow: $(TARGET_SLOW)
+# Profile build
+profile: $(TARGET_PROFILE)
 
-$(TARGET): $(SRCS)
-	$(CXX) $(CXXFLAGS) $(SRCS) $(LDLIBS) -o $(TARGET)
-	cp $(TARGET) $(TARGET_FAST)
+# Build rules
+$(TARGET_V4): $(SRCS_V4) $(HEADERS)
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $(SRCS_V4) -o $@
 
-$(TARGET_DEV): $(SRCS)
-	$(CXX) $(CXXFLAGS_DEV) $(SRCS) $(LDLIBS) -o $(TARGET_DEV) $(LDFLAGS) 
+$(TARGET_DEBUG): $(SRCS_V4) $(HEADERS)
+	$(CXX) $(CXXFLAGS_DEBUG) $(INCLUDES) $(SRCS_V4) -o $@
 
-$(TARGET_LONG): $(SRCS)
-	$(CXX) $(CXXFLAGS) $(SRCS) $(LDLIBS) -o $(TARGET_LONG)
+$(TARGET_PROFILE): $(SRCS_V4) $(HEADERS)
+	$(CXX) $(CXXFLAGS_PROFILE) $(INCLUDES) $(SRCS_V4) -lprofiler -o $@
 
-# $(TARGET_SLOW): $(SRCS_SLOW)
-# 	git checkout e351f3f
-# 	$(CXX) $(CXXFLAGS_DEV) $(SRCS_SLOW) $(LDLIBS) -o $(TARGET_SLOW)
-# 	git checkout master
-
-.PHONY: all prod dev clean slow
+profile-run: $(TARGET_PROFILE)
+	./$(TARGET_PROFILE) $(ARGS)
+	gprof $(TARGET_PROFILE) gmon.out > profile_report.txt
+	@echo "Profile report generated in profile_report.txt"
 
 clean:
-	rm -f $(TARGET) $(TARGET_DEV) $(TARGET_FAST)
+	rm -rf $(BINDIR)
 
-# rm -f $(TARGET) $(TARGET_DEV) $(TARGET_FAST) $(TARGET_SLOW)
+.PHONY: all debug profile profile-run clean
