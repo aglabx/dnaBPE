@@ -4,6 +4,7 @@
 #include <iostream>
 #include <vector>
 #include <unordered_map>
+#include <set>
 #include <fstream>
 #include <bitset>
 #include <stdexcept>
@@ -12,13 +13,11 @@
 #include <nlohmann/json.hpp>
 #include <thread>
 #include <mutex>
-#include <queue>
 #include <condition_variable>
 #include <fstream>
 #include <unordered_set>
 #include "robin_hood.h"
 
-// Add this right after includes, before any other code
 namespace std {
     template<>
     struct hash<pair<uint32_t, uint32_t>> {
@@ -33,51 +32,42 @@ namespace std {
 
 class PairPriorityQueue {
 private:
-    struct PairInfo {
-        uint32_t left;
-        uint32_t right;
-        size_t frequency;
-        
-        PairInfo(uint32_t l, uint32_t r, size_t f) 
-            : left(l), right(r), frequency(f) {}
-            
-        bool operator<(const PairInfo& other) const {
-            // Reverse comparison for max heap
-            return frequency < other.frequency;
+    // Используем pair<size_t, uint64_t> где:
+    // - first это frequency (для сортировки)
+    // - second это упакованный ключ (left << 32 | right)
+    struct PairCompare {
+        bool operator()(const std::pair<size_t, uint64_t>& a, 
+                       const std::pair<size_t, uint64_t>& b) const {
+            return a.first > b.first || (a.first == b.first && a.second < b.second);
         }
     };
     
-    std::priority_queue<PairInfo> heap;
-    robin_hood::unordered_flat_map<uint64_t, size_t> pair_frequencies;  // Changed to robin_hood map
-    size_t invalid_entries = 0;
-    static constexpr size_t REBUILD_THRESHOLD = 1000; // Adjust this value based on your needs
+    std::multiset<std::pair<size_t, uint64_t>, PairCompare> heap;
+    robin_hood::unordered_flat_map<uint64_t, size_t> pair_frequencies;
     
     static uint64_t make_key(uint32_t left, uint32_t right) {
         return (static_cast<uint64_t>(left) << 32) | right;
     }
-    
-    void rebuild_heap() {
-        std::priority_queue<PairInfo> new_heap;
-        for (const auto& [key, freq] : pair_frequencies) {
-            if (freq >= 2) {
-                uint32_t left = key >> 32;
-                uint32_t right = key & 0xFFFFFFFF;
-                new_heap.emplace(left, right, freq);
-            }
-        }
-        heap = std::move(new_heap);
+
+    uint32_t extract_left(uint64_t key) {
+        return static_cast<uint32_t>(key >> 32);
     }
 
-    void rebuild_heap_if_needed() {
-        if (invalid_entries >= REBUILD_THRESHOLD && !heap.empty()) {
-            rebuild_heap();
-            invalid_entries = 0;
+    uint32_t extract_right(uint64_t key) {
+        return static_cast<uint32_t>(key & 0xFFFFFFFF);
+    }
+    
+    void rebuild_heap() {
+        heap.clear();
+        for (const auto& [key, freq] : pair_frequencies) {
+            if (freq >= 2) {
+                heap.emplace(freq, key);
+            }
         }
     }
 
 public:
     PairPriorityQueue() {
-        // Pre-allocate space for common case
         pair_frequencies.reserve(10000);
     }
 
@@ -85,51 +75,68 @@ public:
         uint64_t key = make_key(left, right);
         pair_frequencies[key] += initial_freq;
         if (pair_frequencies[key] >= 2) {
-            heap.emplace(left, right, pair_frequencies[key]);
+            heap.emplace(pair_frequencies[key], key);
         }
     }
     
-    void increase_frequency(uint32_t left, uint32_t right) {
+    void increase_frequency(uint32_t left, uint32_t right, size_t delta) {
         uint64_t key = make_key(left, right);
-        size_t new_freq = ++pair_frequencies[key];
-        if (new_freq == 2) {
-            heap.emplace(left, right, new_freq);
+        size_t old_freq = pair_frequencies[key];
+        size_t new_freq = old_freq + delta;
+        pair_frequencies[key] = new_freq;
+        
+        if (old_freq >= 2) {
+            // Удаляем старую запись
+            heap.erase(heap.find({old_freq, key}));
+        }
+        if (new_freq >= 2) {
+            // Добавляем новую запись
+            heap.emplace(new_freq, key);
         }
     }
     
-    void decrease_frequency(uint32_t left, uint32_t right) {
+    void decrease_frequency(uint32_t left, uint32_t right, size_t delta) {
         uint64_t key = make_key(left, right);
-        if (pair_frequencies[key] > 0) {
-            if (--pair_frequencies[key] < 2) {
-                invalid_entries++;
-                rebuild_heap_if_needed();
+        if (pair_frequencies[key] >= delta) {
+            size_t old_freq = pair_frequencies[key];
+            size_t new_freq = old_freq - delta;
+            pair_frequencies[key] = new_freq;
+            
+            if (old_freq >= 2) {
+                // Удаляем старую запись
+                heap.erase(heap.find({old_freq, key}));
+            }
+            if (new_freq >= 2) {
+                // Добавляем новую запись
+                heap.emplace(new_freq, key);
             }
         }
     }
     
     bool get_most_frequent(uint32_t& left, uint32_t& right, size_t& freq) {
-        while (!heap.empty()) {
-            const PairInfo& top = heap.top();
-            uint64_t key = make_key(top.left, top.right);
-            
-            // Check if the frequency is still valid
-            if (pair_frequencies[key] == top.frequency && pair_frequencies[key] >= 2) {
-                left = top.left;
-                right = top.right;
-                freq = top.frequency;
-                return true;
-            }
-            
-            heap.pop();  // Remove outdated entry
-            invalid_entries--;  // Removed an invalid entry
+        if (heap.empty()) {
+            return false;
         }
-        return false;
+        
+        auto it = heap.begin();
+        auto [top_freq, key] = *it;
+        
+        // Проверяем, что частота все еще валидна
+        if (pair_frequencies[key] == top_freq && pair_frequencies[key] >= 2) {
+            left = extract_left(key);
+            right = extract_right(key);
+            freq = top_freq;
+            return true;
+        }
+        
+        // Если частота не валидна, удаляем запись и пробуем следующую
+        heap.erase(it);
+        return get_most_frequent(left, right, freq);
     }
     
     void clear() {
-        while (!heap.empty()) heap.pop();
+        heap.clear();
         pair_frequencies.clear();
-        invalid_entries = 0;
     }
     
     bool empty() const {

@@ -81,8 +81,7 @@ public:
 
     VectorLinkedList read_all_sequences() {
         VectorLinkedList list;
-        list.init(file_size); // Pre-allocate for worst case
-        
+        list.init(file_size); // Pre-allocate for worst case        
         size_t total_bytes = 0;
         bool first_sequence = true;
         const size_t progress_interval = 10 * 1024 * 1024; // Increase to 10MB intervals

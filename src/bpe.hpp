@@ -75,33 +75,22 @@ private:
         ScopedProfiler prof("initial_count_pairs");
         pair_queue.clear();
         
-        // Use a temporary buffer for batch processing
-        static constexpr size_t BATCH_SIZE = 10000;
-        std::vector<std::pair<uint32_t, uint32_t>> pairs;
-        pairs.reserve(BATCH_SIZE);
+        // First pass: count all pairs in a map
+        robin_hood::unordered_map<std::pair<uint32_t, uint32_t>, size_t> pair_counts;
         
-        // Count initial pairs
         for (auto it = current_sequence.begin(); it != current_sequence.end(); ++it) {
             const VectorNode& current = *it;
             if (current.next_idx != VectorLinkedList::END_MARKER) {
                 const VectorNode& next = current_sequence.get_node(current.next_idx);
                 if (current.token_id != SEP_TOKEN_ID && next.token_id != SEP_TOKEN_ID) {
-                    pairs.emplace_back(current.token_id, next.token_id);
-                    
-                    // Process batch when full
-                    if (pairs.size() >= BATCH_SIZE) {
-                        for (const auto& [left, right] : pairs) {
-                            pair_queue.add_pair(left, right);
-                        }
-                        pairs.clear();
-                    }
+                    pair_counts[{current.token_id, next.token_id}]++;
                 }
             }
         }
         
-        // Process remaining pairs
-        for (const auto& [left, right] : pairs) {
-            pair_queue.add_pair(left, right);
+        // Second pass: initialize priority queue with collected frequencies
+        for (const auto& [pair, freq] : pair_counts) {
+            pair_queue.add_pair(pair.first, pair.second, freq);
         }
     }
     
@@ -112,34 +101,6 @@ private:
         // Decrease frequencies of constituent tokens
         if (left < BASE_VOCAB_SIZE) global_token_frequencies[left] -= pair_freq;
         if (right < BASE_VOCAB_SIZE) global_token_frequencies[right] -= pair_freq;
-    }
-
-    void update_pair_frequencies_after_merge(uint32_t current_idx, uint32_t new_token_id) {
-        VectorNode& current = current_sequence.get_node(current_idx);
-        uint32_t next_idx = current.next_idx;
-        
-        // Get tokens before and after the merged pair
-        uint32_t prev_token = current_sequence.get_prev_token(current_idx);
-        uint32_t next_token = current_sequence.get_next_token(next_idx);
-
-        // Remove the original pair that was merged
-        pair_queue.decrease_frequency(current.token_id, current_sequence.get_node(next_idx).token_id);
-        
-        // Update frequencies for the previous token's pairs
-        if (prev_token != SEP_TOKEN_ID) {
-            // Remove old pair (prev - first)
-            pair_queue.decrease_frequency(prev_token, current.token_id);
-            // Add new pair (prev - new)
-            pair_queue.add_pair(prev_token, new_token_id);
-        }
-
-        // Update frequencies for the next token's pairs
-        if (next_token != SEP_TOKEN_ID) {
-            // Remove old pair (second - next)
-            pair_queue.decrease_frequency(current_sequence.get_node(next_idx).token_id, next_token);
-            // Add new pair (new - next)
-            pair_queue.add_pair(new_token_id, next_token);
-        }
     }
 
     void update_train_progress(size_t current_vocab_size) {
@@ -176,11 +137,55 @@ private:
             current = node.next_idx;
         }
         
+        std::map<std::pair<uint32_t, uint32_t>, int64_t> differences;
+
         // Second pass: apply merges from back to front to avoid position shifts
         for (auto it = merge_positions.rbegin(); it != merge_positions.rend(); ++it) {
-            uint32_t pos = *it;
-            update_pair_frequencies_after_merge(pos, new_id);
-            current_sequence.merge_nodes(pos, new_id);
+            uint32_t current_idx = *it;
+
+            VectorNode& current = current_sequence.get_node(current_idx);
+            uint32_t next_idx = current.next_idx;
+        
+            // Get tokens before and after the merged pair
+            uint32_t prev_token = current_sequence.get_prev_token(current_idx);
+            uint32_t next_token = current_sequence.get_next_token(next_idx);
+
+            // Remove the original pair that was merged
+            pair_queue.decrease_frequency(current.token_id, current_sequence.get_node(next_idx).token_id, 1);
+            // differences[{current.token_id, current_sequence.get_node(next_idx).token_id}]--;
+
+            // Update frequencies for the previous token's pairs
+            if (prev_token != SEP_TOKEN_ID) {
+                // Remove old pair (prev - first)
+                pair_queue.decrease_frequency(prev_token, current.token_id, 1);
+                // differences[{prev_token, current.token_id}]--;
+                // Add new pair (prev - new)
+                pair_queue.add_pair(prev_token, new_id);
+                // differences[{prev_token, new_id}]++;
+            }
+
+            // Update frequencies for the next token's pairs
+            if (next_token != SEP_TOKEN_ID) {
+                // Remove old pair (second - next)
+                pair_queue.decrease_frequency(current_sequence.get_node(next_idx).token_id, next_token, 1);
+                // differences[{current_sequence.get_node(next_idx).token_id, next_token}]--;
+                // Add new pair (new - next)
+                pair_queue.add_pair(new_id, next_token);
+                // differences[{new_id, next_token}]++;
+            }
+
+            // for (const auto& [pair, diff] : differences) {
+            //     if (diff < 0) {
+            //         pair_queue.decrease_frequency(pair.first, pair.second, -diff);
+            //     } else if (diff > 0) {
+            //         pair_queue.increase_frequency(pair.first, pair.second, diff);
+            //     }
+            //     pair_queue.increase_frequency(pair.first, pair.second, diff);
+            // }
+
+            if (!current_sequence.merge_nodes(current_idx, new_id)) {
+                throw std::runtime_error("Failed to merge nodes");
+            }
         }
     }
 
@@ -199,8 +204,6 @@ public:
         }
     }
 
-    
-
     // Публичные методы для внешнего доступа к базовому словарю
     static bool is_valid_token(char c) { return is_nucleotide(c); }
     static uint32_t get_base_token_id(char c) { return char_to_token_id(c); }
@@ -209,9 +212,9 @@ public:
     void train(SequenceReader& reader, int num_merges) {
         ScopedProfiler prof("train");
         current_sequence = reader.read_all_sequences();
+        std::cout << "Data size: " << current_sequence.size() << std::endl;
         std::cerr << "Starting vocabulary training..." << std::endl;
-        update_train_progress(vocab_strings.size());
-        
+        update_train_progress(vocab_strings.size());        
         initial_count_pairs();
         std::unordered_set<std::pair<uint32_t, uint32_t>> used_merges;
         
@@ -235,6 +238,7 @@ public:
             uint32_t new_id = vocab_strings.size();
             vocab_strings.push_back(new_token);
             vocab[new_token] = new_id;
+
             update_token_frequencies(left, right, new_id, freq);  // Update frequencies here
             merges.push_back({left, right});
 
