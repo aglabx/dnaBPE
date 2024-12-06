@@ -22,7 +22,7 @@ HEADERS=$(SRCDIR)/global.hpp \
 INCLUDES=-I. -I$(SRCDIR)
 
 # Output files
-TARGET_V4=$(BINDIR)/bpe.v4.exe
+TARGET_V4=$(BINDIR)/bpe.v5.exe
 TARGET_DEBUG=$(BINDIR)/bpe.debug.exe
 TARGET_PROFILE=$(BINDIR)/bpe.profile.exe
 
