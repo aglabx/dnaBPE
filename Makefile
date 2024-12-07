@@ -1,5 +1,6 @@
 CXX=g++
-CXXFLAGS=-std=c++17 -pthread -O3 -march=native
+CXXFLAGS=-std=c++17 -pthread -O3 -march=native -ffast-math -funroll-loops -flto \
+         -fno-signed-zeros -fno-trapping-math -ftree-vectorize
 CXXFLAGS_DEBUG=-std=c++17 -pthread -g -O0 -Wall
 CXXFLAGS_PROFILE=-std=c++17 -pthread -g -pg -O2
 

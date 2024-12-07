@@ -83,36 +83,33 @@ public:
         VectorLinkedList list;
         list.init(file_size); // Pre-allocate for worst case        
         size_t total_bytes = 0;
-        bool first_sequence = true;
-        const size_t progress_interval = 10 * 1024 * 1024; // Increase to 10MB intervals
+        bool in_sequence = false;
+        const size_t progress_interval = 10 * 1024 * 1024; // 10MB intervals
         size_t next_progress = progress_interval;
 
         std::cerr << "Starting to read sequences..." << std::endl;
 
         while (file) {
-            // Use pre-allocated buffer
             file.read(read_buffer.data(), BUFFER_SIZE);
             std::streamsize bytes_read = file.gcount();
             if (bytes_read <= 0) break;
 
             total_bytes += bytes_read;
-            node_buffer.clear();  // Reuse existing buffer
+            node_buffer.clear();
 
             for (std::streamsize i = 0; i < bytes_read; ++i) {
-                char c = read_buffer[i];
-                uint32_t token_id;
+                char c = std::toupper(read_buffer[i]);
                 
-                if (c == '\n') {
-                    if (!first_sequence) {
-                        token_id = TokenizerConstants::SEP_TOKEN_ID;
-                        node_buffer.emplace_back(token_id);
-                        increase_token_frequency(token_id);
-                    }
-                    first_sequence = false;
-                } else if (c != '\r') {
-                    token_id = TokenizerConstants::char_to_token_id(c);
+                if (c == 'A' || c == 'T' || c == 'G' || c == 'C') {
+                    uint32_t token_id = TokenizerConstants::char_to_token_id(c);
                     node_buffer.emplace_back(token_id);
                     increase_token_frequency(token_id);
+                    in_sequence = true;
+                } else if (in_sequence) {
+                    // Add separator for non-ATGC character if we were in a sequence
+                    node_buffer.emplace_back(TokenizerConstants::SEP_TOKEN_ID);
+                    increase_token_frequency(TokenizerConstants::SEP_TOKEN_ID);
+                    in_sequence = false;
                 }
             }
 
@@ -122,7 +119,6 @@ public:
 
             if (total_bytes >= next_progress) {
                 if (total_bytes - next_progress >= progress_interval) {
-                    // Skip intermediate updates if we're far behind
                     next_progress = total_bytes;
                 }
                 update_progress(total_bytes, file_size);
@@ -130,8 +126,8 @@ public:
             }
         }
 
-        // Add final separator if needed
-        if (!first_sequence) {
+        // Add final separator if the last sequence didn't end with one
+        if (in_sequence) {
             node_buffer.clear();
             node_buffer.emplace_back(TokenizerConstants::SEP_TOKEN_ID);
             list.push_direct(node_buffer);

@@ -69,48 +69,48 @@ int main(int argc, char* argv[]) {
             std::cerr << "Finished training in " << duration << " seconds" << std::endl;
         }
 
-        // Process sequences and save results
-        {
-            ScopedProfiler process_time("Processing");
-            std::cerr << "Processing sequences and saving results..." << std::endl;
-            auto start_time = std::chrono::high_resolution_clock::now();
+        // // Process sequences and save results
+        // {
+        //     ScopedProfiler process_time("Processing");
+        //     std::cerr << "Processing sequences and saving results..." << std::endl;
+        //     auto start_time = std::chrono::high_resolution_clock::now();
 
-            // Read all sequences again for processing
-            auto all_sequences = reader.read_all_sequences();
-            std::string sequence;
-            sequence.reserve(1024);
+        //     // Read all sequences again for processing
+        //     auto all_sequences = reader.read_all_sequences();
+        //     std::string sequence;
+        //     sequence.reserve(1024);
 
-            std::ofstream tokens_file(output_prefix + ".tokens");
-            std::ofstream decoded_file(output_prefix + ".decoded");
+        //     std::ofstream tokens_file(output_prefix + ".tokens");
+        //     std::ofstream decoded_file(output_prefix + ".decoded");
 
-            if (!tokens_file || !decoded_file) {
-                throw std::runtime_error("Failed to open output files");
-            }
+        //     if (!tokens_file || !decoded_file) {
+        //         throw std::runtime_error("Failed to open output files");
+        //     }
 
-            // Process the entire sequence
-            for (const auto& node : all_sequences) {
-                if (node.token_id < 4) {
-                    sequence += "ACGT"[node.token_id];
-                } else {
-                    if (!sequence.empty()) {
-                        auto tokens = tokenizer.tokenize(sequence);
-                        auto decoded = tokenizer.decode(tokens);
+        //     // Process the entire sequence
+        //     for (const auto& node : all_sequences) {
+        //         if (node.token_id < 4) {
+        //             sequence += "ACGT"[node.token_id];
+        //         } else {
+        //             if (!sequence.empty()) {
+        //                 auto tokens = tokenizer.tokenize(sequence);
+        //                 auto decoded = tokenizer.decode(tokens);
 
-                        for (int token : tokens) {
-                            tokens_file << token << ' ';
-                        }
-                        tokens_file << '\n';
-                        decoded_file << decoded << '\n';
-                        sequence.clear();
-                    }
-                }
-            }
+        //                 for (int token : tokens) {
+        //                     tokens_file << token << ' ';
+        //                 }
+        //                 tokens_file << '\n';
+        //                 decoded_file << decoded << '\n';
+        //                 sequence.clear();
+        //             }
+        //         }
+        //     }
 
-            auto end_time = std::chrono::high_resolution_clock::now();
-            auto duration = std::chrono::duration_cast<std::chrono::seconds>(
-                end_time - start_time).count();
-            std::cerr << "Finished processing in " << duration << " seconds" << std::endl;
-        }
+        //     auto end_time = std::chrono::high_resolution_clock::now();
+        //     auto duration = std::chrono::duration_cast<std::chrono::seconds>(
+        //         end_time - start_time).count();
+        //     std::cerr << "Finished processing in " << duration << " seconds" << std::endl;
+        // }
 
         // Save tokenizer configuration
         {

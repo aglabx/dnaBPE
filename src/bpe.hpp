@@ -75,23 +75,75 @@ private:
         ScopedProfiler prof("initial_count_pairs");
         pair_queue.clear();
         
-        // First pass: count all pairs in a map
+        // First pass: count all pairs in a map and save positions
         robin_hood::unordered_map<std::pair<uint32_t, uint32_t>, size_t> pair_counts;
         
+        // Setup progress bar for counting
+        const size_t total_nodes = current_sequence.size();
+        const int bar_width = 50;
+        size_t nodes_processed = 0;
+        int last_percent = -1;
+
         for (auto it = current_sequence.begin(); it != current_sequence.end(); ++it) {
+            // Update progress bar
+            nodes_processed++;
+            int current_percent = (nodes_processed * 100) / total_nodes;
+            if (current_percent != last_percent) {
+                float progress = static_cast<float>(nodes_processed) / total_nodes;
+                int pos = static_cast<int>(bar_width * progress);
+                
+                std::cerr << "\rCounting pairs: [";
+                for (int i = 0; i < bar_width; ++i) {
+                    if (i < pos) std::cerr << "=";
+                    else if (i == pos) std::cerr << ">";
+                    else std::cerr << " ";
+                }
+                std::cerr << "] " << current_percent << "% "
+                         << "(" << nodes_processed << "/" << total_nodes << ")\r";
+                std::cerr.flush();
+                last_percent = current_percent;
+            }
+
             const VectorNode& current = *it;
             if (current.next_idx != VectorLinkedList::END_MARKER) {
                 const VectorNode& next = current_sequence.get_node(current.next_idx);
                 if (current.token_id != SEP_TOKEN_ID && next.token_id != SEP_TOKEN_ID) {
-                    pair_counts[{current.token_id, next.token_id}]++;
+                    auto token_pair = std::make_pair(current.token_id, next.token_id);
+                    pair_counts[token_pair]++;
+                    pair_queue.add_pair_position(current.token_id, next.token_id, next.prev_idx);
                 }
             }
         }
+        std::cerr << "\nPair counting completed. Initializing priority queue..." << std::endl;
         
         // Second pass: initialize priority queue with collected frequencies
+        size_t pairs_processed = 0;
+        const size_t total_pairs = pair_counts.size();
+        last_percent = -1;
+
         for (const auto& [pair, freq] : pair_counts) {
+            pairs_processed++;
+            int current_percent = (pairs_processed * 100) / total_pairs;
+            
+            if (current_percent != last_percent) {
+                float progress = static_cast<float>(pairs_processed) / total_pairs;
+                int pos = static_cast<int>(bar_width * progress);
+                
+                std::cerr << "\rInitializing priority queue: [";
+                for (int i = 0; i < bar_width; ++i) {
+                    if (i < pos) std::cerr << "=";
+                    else if (i == pos) std::cerr << ">";
+                    else std::cerr << " ";
+                }
+                std::cerr << "] " << current_percent << "% "
+                         << "(" << pairs_processed << "/" << total_pairs << ")\r";
+                std::cerr.flush();
+                last_percent = current_percent;
+            }
+            
             pair_queue.add_pair(pair.first, pair.second, freq);
         }
+        std::cerr << "\nPriority queue initialization completed." << std::endl;
     }
     
     void update_token_frequencies(uint32_t left, uint32_t right, uint32_t new_id, size_t pair_freq) {
@@ -103,88 +155,111 @@ private:
         if (right < BASE_VOCAB_SIZE) global_token_frequencies[right] -= pair_freq;
     }
 
-    void update_train_progress(size_t current_vocab_size) {
+    void update_train_progress(size_t current_vocab_size, int step, size_t freq, 
+                             const std::string& left_token, const std::string& right_token) {
         const int bar_width = 50;
         float progress = static_cast<float>(current_vocab_size - BASE_VOCAB_SIZE) / 
                         (max_vocab_size - BASE_VOCAB_SIZE);
         int pos = static_cast<int>(bar_width * progress);
 
-        std::cerr << "\rTraining vocabulary: [";
+        auto format_token = [](const std::string& token) -> std::string {
+            return token.length() > 3 ? token.substr(0, 3) + "..." : token;
+        };
+
+        std::string left = format_token(left_token);
+        std::string right = format_token(right_token);
+
+        // Форматируем строку прогресса с фиксированной шириной
+        std::string progress_str = "\rTraining vocabulary: [";
         for (int i = 0; i < bar_width; ++i) {
-            if (i < pos) std::cerr << "=";
-            else if (i == pos) std::cerr << ">";
-            else std::cerr << " ";
+            if (i < pos) progress_str += "=";
+            else if (i == pos) progress_str += ">";
+            else progress_str += " ";
         }
-        std::cerr << "] " << int(progress * 100.0) << "% "
-                 << "Vocab size: " << current_vocab_size << "/" << max_vocab_size << "\r";
-        std::cerr.flush();
+        
+        char buf[256];
+        snprintf(buf, sizeof(buf),
+                "] %3d%% Vocab size: %zu/%-5d | Step: %-4d | Merging: '%-7s'+'%-7s' (freq: %-6zu)",
+                int(progress * 100.0),
+                current_vocab_size, max_vocab_size,
+                step,
+                left.c_str(), right.c_str(),
+                freq);
+        
+        progress_str += buf;
+        progress_str += "\r";
+        std::cerr << progress_str << std::flush;
     }
+
+    
 
     void apply_merges_batch(uint32_t left, uint32_t right, uint32_t new_id) {
         ScopedProfiler prof("apply_merges_batch");
+        
+        // Get all positions from our pair_queue instead of iterating through sequence
+        const auto& positions = pair_queue.get_pair_positions(left, right);
         std::vector<uint32_t> merge_positions;
-        uint32_t current = current_sequence.get_head();
         
-        // First pass: collect all positions where we can merge
-        while (current != VectorLinkedList::END_MARKER) {
-            VectorNode& node = current_sequence.get_node(current);
-            if (node.next_idx != VectorLinkedList::END_MARKER) {
-                const VectorNode& next = current_sequence.get_node(node.next_idx);
-                if (node.token_id == left && next.token_id == right) {
-                    merge_positions.push_back(current);
-                }
+        // Select non-overlapping positions
+        std::vector<bool> used(current_sequence.size(), false);
+        for (size_t pos : positions) {
+            VectorNode& node = current_sequence.get_node(pos);
+            if (!used[pos] && !used[node.next_idx]) {
+                merge_positions.push_back(pos);
+                used[pos] = true;
+                used[node.next_idx] = true;
             }
-            current = node.next_idx;
         }
-        
-        std::map<std::pair<uint32_t, uint32_t>, int64_t> differences;
 
-        // Second pass: apply merges from back to front to avoid position shifts
+        std::map<std::pair<uint32_t, uint32_t>, int64_t> differences;
+        
         for (auto it = merge_positions.rbegin(); it != merge_positions.rend(); ++it) {
             uint32_t current_idx = *it;
-
             VectorNode& current = current_sequence.get_node(current_idx);
             uint32_t next_idx = current.next_idx;
-        
-            // Get tokens before and after the merged pair
+            
             uint32_t prev_token = current_sequence.get_prev_token(current_idx);
             uint32_t next_token = current_sequence.get_next_token(next_idx);
 
-            // Remove the original pair that was merged
-            pair_queue.decrease_frequency(current.token_id, current_sequence.get_node(next_idx).token_id, 1);
-            // differences[{current.token_id, current_sequence.get_node(next_idx).token_id}]--;
-
-            // Update frequencies for the previous token's pairs
+            // Remove old pairs' positions
+            pair_queue.remove_pair_position(left, right, current_idx);
             if (prev_token != SEP_TOKEN_ID) {
-                // Remove old pair (prev - first)
-                pair_queue.decrease_frequency(prev_token, current.token_id, 1);
-                // differences[{prev_token, current.token_id}]--;
-                // Add new pair (prev - new)
-                pair_queue.add_pair(prev_token, new_id);
-                // differences[{prev_token, new_id}]++;
+                pair_queue.remove_pair_position(prev_token, left, current.prev_idx);
             }
-
-            // Update frequencies for the next token's pairs
             if (next_token != SEP_TOKEN_ID) {
-                // Remove old pair (second - next)
-                pair_queue.decrease_frequency(current_sequence.get_node(next_idx).token_id, next_token, 1);
-                // differences[{current_sequence.get_node(next_idx).token_id, next_token}]--;
-                // Add new pair (new - next)
-                pair_queue.add_pair(new_id, next_token);
-                // differences[{new_id, next_token}]++;
+                pair_queue.remove_pair_position(right, next_token, next_idx);
             }
 
-            // for (const auto& [pair, diff] : differences) {
-            //     if (diff < 0) {
-            //         pair_queue.decrease_frequency(pair.first, pair.second, -diff);
-            //     } else if (diff > 0) {
-            //         pair_queue.increase_frequency(pair.first, pair.second, diff);
-            //     }
-            //     pair_queue.increase_frequency(pair.first, pair.second, diff);
-            // }
+            // Add new pairs' positions
+            if (prev_token != SEP_TOKEN_ID) {
+                pair_queue.add_pair_position(prev_token, new_id, current.prev_idx);
+            }
+            if (next_token != SEP_TOKEN_ID) {
+                pair_queue.add_pair_position(new_id, next_token, current_idx);
+            }
+
+            // Update frequencies using differences map
+            differences[{left, right}]--;
+            if (prev_token != SEP_TOKEN_ID) {
+                differences[{prev_token, left}]--;
+                differences[{prev_token, new_id}]++;
+            }
+            if (next_token != SEP_TOKEN_ID) {
+                differences[{right, next_token}]--;
+                differences[{new_id, next_token}]++;
+            }
 
             if (!current_sequence.merge_nodes(current_idx, new_id)) {
                 throw std::runtime_error("Failed to merge nodes");
+            }
+        }
+
+        // Apply frequency differences
+        for (const auto& [pair, diff] : differences) {
+            if (diff < 0) {
+                pair_queue.decrease_frequency(pair.first, pair.second, -diff);
+            } else if (diff > 0) {
+                pair_queue.increase_frequency(pair.first, pair.second, diff);
             }
         }
     }
@@ -213,39 +288,33 @@ public:
         ScopedProfiler prof("train");
         current_sequence = reader.read_all_sequences();
         std::cout << "Data size: " << current_sequence.size() << std::endl;
-        std::cerr << "Starting vocabulary training..." << std::endl;
-        update_train_progress(vocab_strings.size());        
+        std::cerr << "Starting vocabulary training...\r" << std::flush;
         initial_count_pairs();
-        std::unordered_set<std::pair<uint32_t, uint32_t>> used_merges;
         
         for (int i = 0; i < num_merges && vocab_strings.size() < max_vocab_size; ++i) {
             uint32_t left, right;
             size_t freq;
-            
-            bool found_valid_pair = false;
-            while (!found_valid_pair && pair_queue.get_most_frequent(left, right, freq)) {
-                std::pair<uint32_t, uint32_t> current_pair{left, right};
-                if (used_merges.count(current_pair) == 0) {
-                    found_valid_pair = true;
-                }
+            bool found = pair_queue.get_most_frequent(left, right, freq);
+            if (!found) {
+                std::cerr << "\rNo more pairs to merge. Stopping training.\n" << std::flush;
+                break;
             }
-            
-            if (!found_valid_pair) break;
-
-            used_merges.insert({left, right});
+            std::pair<uint32_t, uint32_t> current_pair{left, right};
             
             std::string new_token = vocab_strings[left] + vocab_strings[right];
             uint32_t new_id = vocab_strings.size();
             vocab_strings.push_back(new_token);
             vocab[new_token] = new_id;
 
-            update_token_frequencies(left, right, new_id, freq);  // Update frequencies here
+            update_token_frequencies(left, right, new_id, freq);
             merges.push_back({left, right});
-
-            // Apply merges and update frequencies
+            
             apply_merges_batch(left, right, new_id);
             
-            update_train_progress(vocab_strings.size());
+            // Очищаем предыдущую строку перед выводом нового прогресса
+            std::cerr << "\r" << std::string(120, ' ') << "\r" << std::flush;  // 120 пробелов для очистки
+            update_train_progress(vocab_strings.size(), i + 1, freq,
+                                vocab_strings[left], vocab_strings[right]);
         }
         
         std::cerr << "\nVocabulary training completed. Final size: " 
