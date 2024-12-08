@@ -116,7 +116,6 @@ public:
         nodes[second_pos].next_offset = END_MARKER;
         nodes[second_pos].prev_offset = END_MARKER;
 
-        size_--;
         return true;
     }
     

@@ -27,7 +27,7 @@ void print_usage() {
     std::cerr << "Input format: one DNA sequence per line\n";
 }
 
-robin_hood::unordered_flat_map<std::string, double> ScopedProfiler::timings;
+// robin_hood::unordered_flat_map<std::string, double> ScopedProfiler::timings;
 
 int main(int argc, char* argv[]) {
 
@@ -40,7 +40,7 @@ int main(int argc, char* argv[]) {
     }
 
     try {
-        ScopedProfiler total_time("Total");
+        // ScopedProfiler total_time("Total");
         
         std::string input_file = argv[1];
         std::string output_prefix = argv[2];
@@ -57,7 +57,7 @@ int main(int argc, char* argv[]) {
 
         // Train tokenizer
         {
-            ScopedProfiler train_time("Training");
+            // ScopedProfiler train_time("Training");
             std::cerr << "Training tokenizer..." << std::endl;
             auto start_time = std::chrono::high_resolution_clock::now();
             
@@ -154,7 +154,7 @@ int main(int argc, char* argv[]) {
         }
 
         std::cerr << "All operations completed successfully" << std::endl;
-        ScopedProfiler::printReport();
+        // ScopedProfiler::printReport();
         return 0;
 
     } catch (const std::exception& e) {

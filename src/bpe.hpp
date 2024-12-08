@@ -72,7 +72,7 @@ private:
     PairPriorityQueue pair_queue;  // Add this member
 
     void initial_count_pairs() {
-        ScopedProfiler prof("initial_count_pairs");
+        // ScopedProfiler prof("initial_count_pairs");
         pair_queue.clear();
         
         // First pass: count all pairs in a map and save positions
@@ -80,17 +80,34 @@ private:
         
         // Setup progress bar for counting
         const size_t total_nodes = current_sequence.size();
-        std::cerr << "Debug: Total nodes in sequence: " << total_nodes << std::endl;
+        size_t nodes_processed = 0;
+        int bar_width = 50;
+        int last_percent = -1;
         
-        // Print the entire sequence for debugging
-        std::cerr << "Debug: Sequence content:" << std::endl;
+        std::cerr << "Processing sequence nodes:" << std::endl;
+        
         uint64_t current_pos = current_sequence.get_head();
         while (current_pos != VectorLinkedList::END_MARKER) {
+            nodes_processed++;
+            int current_percent = (nodes_processed * 100) / total_nodes;
+            
+            if (current_percent != last_percent) {
+                float progress = static_cast<float>(nodes_processed) / total_nodes;
+                int pos = static_cast<int>(bar_width * progress);
+                
+                std::cerr << "\r[";
+                for (int i = 0; i < bar_width; ++i) {
+                    if (i < pos) std::cerr << "=";
+                    else if (i == pos) std::cerr << ">";
+                    else std::cerr << " ";
+                }
+                std::cerr << "] " << current_percent << "% "
+                         << "(" << nodes_processed << "/" << total_nodes << ")\r";
+                std::cerr.flush();
+                last_percent = current_percent;
+            }
+
             const VectorNode& node = current_sequence.get_node(current_pos);
-            std::cerr << "Pos: " << current_pos 
-                     << ", Token: " << node.token_id 
-                     << ", Next offset: " << node.next_offset 
-                     << ", Prev offset: " << node.prev_offset << std::endl;
             
             if (node.next_offset != VectorLinkedList::END_MARKER) {
                 uint64_t next_pos = current_pos + node.next_offset;
@@ -99,25 +116,26 @@ private:
                     auto token_pair = std::make_pair(node.token_id, next.token_id);
                     pair_counts[token_pair]++;
                     pair_queue.add_pair_position(node.token_id, next.token_id, current_pos);
-                    std::cerr << "Found pair: (" << node.token_id << "," << next.token_id 
-                             << ") at position " << current_pos << std::endl;
+                    // std::cerr << "Found pair: (" << node.token_id << "," << next.token_id 
+                    //          << ") at position " << current_pos << std::endl;
                 }
             }
             
             current_pos = (node.next_offset == VectorLinkedList::END_MARKER) ? 
                           VectorLinkedList::END_MARKER : current_pos + node.next_offset;
         }
+        std::cerr << "\nNode processing completed." << std::endl;
 
-        std::cerr << "Debug: Found " << pair_counts.size() << " unique pairs" << std::endl;
-        for (const auto& [pair, count] : pair_counts) {
-            std::cerr << "Pair (" << pair.first << "," << pair.second << ") count: " << count << std::endl;
-        }
+        // std::cerr << "Debug: Found " << pair_counts.size() << " unique pairs" << std::endl;
+        // for (const auto& [pair, count] : pair_counts) {
+        //     std::cerr << "Pair (" << pair.first << "," << pair.second << ") count: " << count << std::endl;
+        // }
 
         // Second pass: initialize priority queue with collected frequencies
         size_t pairs_processed = 0;
         const size_t total_pairs = pair_counts.size();
-        const int bar_width = 50;
-        int last_percent = -1;
+        bar_width = 50;
+        last_percent = -1;
 
         for (const auto& [pair, freq] : pair_counts) {
             pairs_processed++;
@@ -192,7 +210,7 @@ private:
     
 
     void apply_merges_batch(uint32_t left, uint32_t right, uint32_t new_id) {
-        ScopedProfiler prof("apply_merges_batch");
+        // ScopedProfiler prof("apply_merges_batch");
         
         const auto& positions = pair_queue.get_pair_positions(left, right);
         std::vector<uint64_t> merge_positions;
@@ -298,7 +316,7 @@ public:
     static constexpr size_t get_sep_token_id() { return SEP_TOKEN_ID; }
 
     void train(SequenceReader& reader, int num_merges) {
-        ScopedProfiler prof("train");
+        // ScopedProfiler prof("train");
         current_sequence = reader.read_all_sequences();
         // current_sequence.print();
         std::cout << "Data size: " << current_sequence.size() << std::endl;
@@ -336,7 +354,7 @@ public:
             apply_merges_batch(left, right, new_id);
             auto end_time = std::chrono::high_resolution_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
-            std::cerr << "Merge operation completed in " << duration.count() << " ms" << std::endl;
+            std::cerr << "Merge operation completed in " << duration.count() << " ms," << " a new sequence size is " << current_sequence.size() << std::endl;
 
             // pair_queue.print_heap();
             // pair_queue.print_frequencies();
