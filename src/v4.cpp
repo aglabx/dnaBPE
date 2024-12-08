@@ -52,7 +52,7 @@ int main(int argc, char* argv[]) {
         std::cerr << "Initialized tokenizer with max vocab size: " << max_tokens << std::endl;
 
         // Read all sequences at once
-        SequenceReader reader(input_file);
+        SequenceReaderImpl reader(input_file);
         std::cerr << "File size: " << reader.get_file_size() << " bytes" << std::endl;
 
         // Train tokenizer
@@ -69,7 +69,7 @@ int main(int argc, char* argv[]) {
             std::cerr << "Finished training in " << duration << " seconds" << std::endl;
         }
 
-        // // Process sequences and save results
+        // Process sequences and save results
         // {
         //     ScopedProfiler process_time("Processing");
         //     std::cerr << "Processing sequences and saving results..." << std::endl;
@@ -88,7 +88,10 @@ int main(int argc, char* argv[]) {
         //     }
 
         //     // Process the entire sequence
-        //     for (const auto& node : all_sequences) {
+        //     uint64_t current_pos = all_sequences.get_head();
+        //     while (current_pos != VectorLinkedList::END_MARKER) {
+        //         const VectorNode& node = all_sequences.get_node(current_pos);
+                
         //         if (node.token_id < 4) {
         //             sequence += "ACGT"[node.token_id];
         //         } else {
@@ -104,6 +107,9 @@ int main(int argc, char* argv[]) {
         //                 sequence.clear();
         //             }
         //         }
+                
+        //         current_pos = (node.next_offset == VectorLinkedList::END_MARKER) ? 
+        //                      VectorLinkedList::END_MARKER : current_pos + node.next_offset;
         //     }
 
         //     auto end_time = std::chrono::high_resolution_clock::now();

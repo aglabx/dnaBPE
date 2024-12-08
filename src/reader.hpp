@@ -22,9 +22,21 @@
 
 // First, define SequenceReader class (move it before DNABPETokenizer)
 class SequenceReader {
+protected:
+    std::string file;
+    uint64_t file_size;
+
+public:
+    SequenceReader(const std::string& filename) : file(filename), file_size(0) {}
+    virtual ~SequenceReader() = default;
+    
+    // Change return type to VectorLinkedList instead of unique_ptr
+    virtual VectorLinkedList read_all_sequences() = 0;
+};
+
+class SequenceReaderImpl : public SequenceReader {
 private:
-    std::ifstream file;
-    size_t file_size;
+    std::ifstream file_stream;
     static constexpr size_t BUFFER_SIZE = 10 * 1024 * 1024; // Increase to 10MB buffer
     
     // Reusable buffers as class members
@@ -32,9 +44,9 @@ private:
     std::vector<VectorNode> node_buffer;
 
     void calculate_file_size() {
-        file.seekg(0, std::ios::end);
-        file_size = file.tellg();
-        file.seekg(0, std::ios::beg);
+        file_stream.seekg(0, std::ios::end);
+        file_size = file_stream.tellg();
+        file_stream.seekg(0, std::ios::beg);
     }
 
     void update_progress(size_t current, size_t total) {
@@ -65,8 +77,8 @@ private:
     }
 
 public:
-    SequenceReader(const std::string& filename) : file(filename), file_size(0) {
-        if (!file) {
+    SequenceReaderImpl(const std::string& filename) : SequenceReader(filename), file_stream(filename) {
+        if (!file_stream) {
             throw std::runtime_error("Could not open file: " + filename);
         }
         calculate_file_size();
@@ -79,7 +91,7 @@ public:
         node_buffer.reserve(BUFFER_SIZE);
     }
 
-    VectorLinkedList read_all_sequences() {
+    VectorLinkedList read_all_sequences() override {
         VectorLinkedList list;
         list.init(file_size); // Pre-allocate for worst case        
         size_t total_bytes = 0;
@@ -89,9 +101,9 @@ public:
 
         std::cerr << "Starting to read sequences..." << std::endl;
 
-        while (file) {
-            file.read(read_buffer.data(), BUFFER_SIZE);
-            std::streamsize bytes_read = file.gcount();
+        while (file_stream) {
+            file_stream.read(read_buffer.data(), BUFFER_SIZE);
+            std::streamsize bytes_read = file_stream.gcount();
             if (bytes_read <= 0) break;
 
             total_bytes += bytes_read;
@@ -102,12 +114,23 @@ public:
                 
                 if (c == 'A' || c == 'T' || c == 'G' || c == 'C') {
                     uint32_t token_id = TokenizerConstants::char_to_token_id(c);
-                    node_buffer.emplace_back(token_id);
+                    // Установка относительных смещений: 1 для next_offset (следующий узел)
+                    // и 1 для prev_offset (предыдущий узел)
+                    if (!node_buffer.empty()) {
+                        node_buffer.back().next_offset = 1;
+                        node_buffer.emplace_back(token_id, UINT32_MAX, 1);
+                    } else {
+                        node_buffer.emplace_back(token_id, UINT32_MAX, UINT32_MAX);
+                    }
                     increase_token_frequency(token_id);
                     in_sequence = true;
                 } else if (in_sequence) {
-                    // Add separator for non-ATGC character if we were in a sequence
-                    node_buffer.emplace_back(TokenizerConstants::SEP_TOKEN_ID);
+                    if (!node_buffer.empty()) {
+                        node_buffer.back().next_offset = 1;
+                        node_buffer.emplace_back(TokenizerConstants::SEP_TOKEN_ID, UINT32_MAX, 1);
+                    } else {
+                        node_buffer.emplace_back(TokenizerConstants::SEP_TOKEN_ID, UINT32_MAX, UINT32_MAX);
+                    }
                     increase_token_frequency(TokenizerConstants::SEP_TOKEN_ID);
                     in_sequence = false;
                 }
@@ -126,10 +149,9 @@ public:
             }
         }
 
-        // Add final separator if the last sequence didn't end with one
         if (in_sequence) {
             node_buffer.clear();
-            node_buffer.emplace_back(TokenizerConstants::SEP_TOKEN_ID);
+            node_buffer.emplace_back(TokenizerConstants::SEP_TOKEN_ID, UINT32_MAX, UINT32_MAX);
             list.push_direct(node_buffer);
         }
 
@@ -141,9 +163,9 @@ public:
 
     size_t get_file_size() const { return file_size; }
 
-    ~SequenceReader() {
-        if (file.is_open()) {
-            file.close();
+    ~SequenceReaderImpl() {
+        if (file_stream.is_open()) {
+            file_stream.close();
         }
     }
 };
