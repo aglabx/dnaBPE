@@ -67,12 +67,12 @@ private:
     std::vector<std::string> vocab_strings;  // индекс это id токена, значение - строка
     robin_hood::unordered_map<std::string, uint32_t> vocab;  // строка -> id токена
     std::vector<std::pair<uint32_t, uint32_t>> merges;  // пары id токенов для мерджей
-    VectorLinkedList current_sequence;  // Заменяем vector<VectorLinkedList> на один список
+    CompactLinkedList current_sequence;  // Заменяем vector<CompactLinkedList> на один список
     int max_vocab_size;  // Removed const qualifier
     PairPriorityQueue pair_queue;  // Add this member
 
     void initial_count_pairs() {
-        // ScopedProfiler prof("initial_count_pairs");
+        // ScopedProfiler prof("Initial pair counting");
         pair_queue.clear();
         
         // First pass: count all pairs in a map and save positions
@@ -86,8 +86,8 @@ private:
         
         std::cerr << "Processing sequence nodes:" << std::endl;
         
-        uint64_t current_pos = current_sequence.get_head();
-        while (current_pos != VectorLinkedList::END_MARKER) {
+        int64_t current_pos = current_sequence.get_head();
+        while (current_pos != -1) {  // Changed from END_MARKER to -1
             nodes_processed++;
             int current_percent = (nodes_processed * 100) / total_nodes;
             
@@ -107,34 +107,25 @@ private:
                 last_percent = current_percent;
             }
 
-            const VectorNode& node = current_sequence.get_node(current_pos);
+            uint32_t current_token = current_sequence.get_token(current_pos);
+            int64_t next_pos = current_sequence.get_next_pos(current_pos);
             
-            if (node.next_offset != VectorLinkedList::END_MARKER) {
-                uint64_t next_pos = current_pos + node.next_offset;
-                const VectorNode& next = current_sequence.get_node(next_pos);
-                if (node.token_id != SEP_TOKEN_ID && next.token_id != SEP_TOKEN_ID) {  // Changed from current to node
-                    auto token_pair = std::make_pair(node.token_id, next.token_id);
+            if (next_pos != -1) {
+                uint32_t next_token = current_sequence.get_token(next_pos);
+                if (current_token != SEP_TOKEN_ID && next_token != SEP_TOKEN_ID) {
+                    auto token_pair = std::make_pair(current_token, next_token);
                     pair_counts[token_pair]++;
-                    pair_queue.add_pair_position(node.token_id, next.token_id, current_pos);
-                    // std::cerr << "Found pair: (" << node.token_id << "," << next.token_id 
-                    //          << ") at position " << current_pos << std::endl;
+                    pair_queue.add_pair_position(current_token, next_token, current_pos);
                 }
             }
             
-            current_pos = (node.next_offset == VectorLinkedList::END_MARKER) ? 
-                          VectorLinkedList::END_MARKER : current_pos + node.next_offset;
+            current_pos = current_sequence.get_next_pos(current_pos);
         }
         std::cerr << "\nNode processing completed." << std::endl;
-
-        // std::cerr << "Debug: Found " << pair_counts.size() << " unique pairs" << std::endl;
-        // for (const auto& [pair, count] : pair_counts) {
-        //     std::cerr << "Pair (" << pair.first << "," << pair.second << ") count: " << count << std::endl;
-        // }
 
         // Second pass: initialize priority queue with collected frequencies
         size_t pairs_processed = 0;
         const size_t total_pairs = pair_counts.size();
-        bar_width = 50;
         last_percent = -1;
 
         for (const auto& [pair, freq] : pair_counts) {
@@ -210,17 +201,14 @@ private:
     
 
     void apply_merges_batch(uint32_t left, uint32_t right, uint32_t new_id) {
-        // ScopedProfiler prof("apply_merges_batch");
-        
         const auto& positions = pair_queue.get_pair_positions(left, right);
-        std::vector<uint64_t> merge_positions;
+        std::vector<int64_t> merge_positions;
         
         // Select non-overlapping positions
         std::vector<bool> used(current_sequence.size(), false);
-        for (size_t pos : positions) {
-            VectorNode& node = current_sequence.get_node(pos);
-            uint64_t next_pos = current_sequence.get_next_positions(pos);
-            if (!used[pos] && !used[next_pos]) {
+        for (int64_t pos : positions) {
+            int64_t next_pos = current_sequence.get_next_pos(pos);
+            if (next_pos != -1 && !used[pos] && !used[next_pos]) {
                 merge_positions.push_back(pos);
                 used[pos] = true;
                 used[next_pos] = true;
@@ -230,9 +218,8 @@ private:
         std::map<std::pair<uint32_t, uint32_t>, int64_t> differences;
         
         for (auto it = merge_positions.rbegin(); it != merge_positions.rend(); ++it) {
-            uint64_t current_pos = *it;
-            VectorNode& current = current_sequence.get_node(current_pos);
-            uint64_t next_pos = current_sequence.get_next_positions(current_pos);
+            int64_t current_pos = *it;
+            int64_t next_pos = current_sequence.get_next_pos(current_pos);
             
             uint32_t prev_token = current_sequence.get_prev_token(current_pos);
             uint32_t next_token = current_sequence.get_next_token(next_pos);
@@ -240,7 +227,7 @@ private:
             // Remove old pairs' positions
             pair_queue.remove_pair_position(left, right, current_pos);
             if (prev_token != SEP_TOKEN_ID) {
-                uint64_t prev_pos = current_sequence.get_prev_positions(current_pos);
+                int64_t prev_pos = current_sequence.get_prev_pos(current_pos);
                 pair_queue.remove_pair_position(prev_token, left, prev_pos);
             }
             if (next_token != SEP_TOKEN_ID) {
@@ -249,7 +236,7 @@ private:
 
             // Add new pairs' positions
             if (prev_token != SEP_TOKEN_ID) {
-                uint64_t prev_pos = current_sequence.get_prev_positions(current_pos);;
+                int64_t prev_pos = current_sequence.get_prev_pos(current_pos);
                 pair_queue.add_pair_position(prev_token, new_id, prev_pos);
             }
             if (next_token != SEP_TOKEN_ID) {

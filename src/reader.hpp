@@ -17,7 +17,7 @@
 #include <condition_variable>
 #include <fstream>
 #include <unordered_set>
-#include "linkedvector.hpp"
+#include "compact_linked_list.hpp"
 #include "global.hpp"
 
 // First, define SequenceReader class (move it before DNABPETokenizer)
@@ -30,8 +30,8 @@ public:
     SequenceReader(const std::string& filename) : file(filename), file_size(0) {}
     virtual ~SequenceReader() = default;
     
-    // Change return type to VectorLinkedList instead of unique_ptr
-    virtual VectorLinkedList read_all_sequences() = 0;
+    // Change return type to CompactLinkedList instead of unique_ptr
+    virtual CompactLinkedList read_all_sequences() = 0;
 };
 
 class SequenceReaderImpl : public SequenceReader {
@@ -41,7 +41,7 @@ private:
     
     // Reusable buffers as class members
     std::vector<char> read_buffer;
-    std::vector<VectorNode> node_buffer;
+    std::vector<uint32_t> node_buffer;
 
     void calculate_file_size() {
         file_stream.seekg(0, std::ios::end);
@@ -91,8 +91,8 @@ public:
         node_buffer.reserve(BUFFER_SIZE);
     }
 
-    VectorLinkedList read_all_sequences() override {
-        VectorLinkedList list;
+    CompactLinkedList read_all_sequences() override {
+        CompactLinkedList list;
         list.init(file_size); // Pre-allocate for worst case        
         size_t total_bytes = 0;
         bool in_sequence = false;
@@ -114,23 +114,11 @@ public:
                 
                 if (c == 'A' || c == 'T' || c == 'G' || c == 'C') {
                     uint32_t token_id = TokenizerConstants::char_to_token_id(c);
-                    // Установка относительных смещений: 1 для next_offset (следующий узел)
-                    // и 1 для prev_offset (предыдущий узел)
-                    if (!node_buffer.empty()) {
-                        node_buffer.back().next_offset = 1;
-                        node_buffer.emplace_back(token_id, UINT32_MAX, 1);
-                    } else {
-                        node_buffer.emplace_back(token_id, UINT32_MAX, UINT32_MAX);
-                    }
+                    node_buffer.emplace_back(token_id);
                     increase_token_frequency(token_id);
                     in_sequence = true;
                 } else if (in_sequence) {
-                    if (!node_buffer.empty()) {
-                        node_buffer.back().next_offset = 1;
-                        node_buffer.emplace_back(TokenizerConstants::SEP_TOKEN_ID, UINT32_MAX, 1);
-                    } else {
-                        node_buffer.emplace_back(TokenizerConstants::SEP_TOKEN_ID, UINT32_MAX, UINT32_MAX);
-                    }
+                    node_buffer.emplace_back(TokenizerConstants::SEP_TOKEN_ID);
                     increase_token_frequency(TokenizerConstants::SEP_TOKEN_ID);
                     in_sequence = false;
                 }
@@ -151,7 +139,7 @@ public:
 
         if (in_sequence) {
             node_buffer.clear();
-            node_buffer.emplace_back(TokenizerConstants::SEP_TOKEN_ID, UINT32_MAX, UINT32_MAX);
+            node_buffer.emplace_back(TokenizerConstants::SEP_TOKEN_ID);
             list.push_direct(node_buffer);
         }
 

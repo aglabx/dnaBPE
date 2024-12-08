@@ -79,6 +79,49 @@ public:
         return true;
     }
 
+    void push_direct(const std::vector<uint32_t>& new_tokens) {
+        size_t old_size = tokens.size();
+        size_t add_size = new_tokens.size();
+        
+        // Reserve space and add new tokens
+        tokens.insert(tokens.end(), new_tokens.begin(), new_tokens.end());
+        prev.resize(old_size + add_size);
+        next.resize(old_size + add_size);
+        
+        if (head == -1) {
+            // First elements in empty list
+            head = old_size;
+            tail = old_size + add_size - 1;
+            
+            // Set up links for new nodes
+            for (size_t i = old_size; i < old_size + add_size - 1; ++i) {
+                prev[i] = i - 1;
+                next[i] = i + 1;
+            }
+            // Handle first and last nodes specially
+            prev[old_size] = -1;
+            next[tail] = -1;
+            prev[tail] = tail - 1;
+        } else {
+            // Link old tail to new nodes
+            next[tail] = old_size;
+            prev[old_size] = tail;
+            
+            // Set up links for new nodes
+            for (size_t i = old_size; i < old_size + add_size - 1; ++i) {
+                prev[i] = i - 1;
+                next[i] = i + 1;
+            }
+            // Update last node and tail
+            prev[old_size + add_size - 1] = old_size + add_size - 2;
+            next[old_size + add_size - 1] = -1;
+            tail = old_size + add_size - 1;
+        }
+        
+        size_ += add_size;
+        capacity += add_size;
+    }
+
     int64_t get_head() const { return head; }
     size_t size() const { return size_; }
 
