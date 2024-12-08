@@ -86,3 +86,15 @@ To remove all built files:
 ```bash
 make clean
 ```
+
+```bash
+# On Ubuntu/Debian
+sudo apt-get install lcov
+
+# On macOS
+brew install lcov
+
+make coverage
+```
+
+View the results by opening coverage/html/index.html in a web browser.

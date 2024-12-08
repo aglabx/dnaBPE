@@ -26,3 +26,7 @@ genome.reads
 genome.tokens
 /tests_data
 profile_report.txt
+llvm-gcov
+coverage-data
+coverage
+build
