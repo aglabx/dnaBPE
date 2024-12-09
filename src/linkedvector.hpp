@@ -92,10 +92,10 @@ public:
     
     // Merge two consecutive nodes
     bool merge_nodes(uint64_t first_pos, uint32_t new_token_id) {
-        if (first_pos >= nodes.size() || 
-            nodes[first_pos].next_offset == END_MARKER) {
-            return false;
-        }
+        // if (first_pos >= nodes.size() || 
+        //     nodes[first_pos].next_offset == END_MARKER) {
+        //     return false;
+        // }
         
         uint64_t second_pos = first_pos + nodes[first_pos].next_offset;
         uint64_t next_pos = (nodes[second_pos].next_offset == END_MARKER) ? 
